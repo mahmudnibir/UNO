@@ -81,8 +81,8 @@ const GameTable: React.FC<GameTableProps> = ({
 
       setPrevDiscardId(discardTop.id);
       
-      // Reset animation
-      setTimeout(() => setFlyingCard(null), 600);
+      // Reset animation - matched to 1.2s CSS animation
+      setTimeout(() => setFlyingCard(null), 1200);
     }
   }, [discardTop.id, lastAction]);
 
@@ -166,9 +166,6 @@ const GameTable: React.FC<GameTableProps> = ({
   // --- Position Logic ---
   const renderBots = () => {
       const totalPlayers = players.length;
-      
-      // Player 0 is always local (Bottom, handled outside this function implicitly or just not rendered here)
-      // We need to render players 1...totalPlayers-1
       
       const bots = [];
 
@@ -258,11 +255,12 @@ const GameTable: React.FC<GameTableProps> = ({
                {/* Flying Card */}
                {flyingCard && (
                    <div 
-                     className="absolute top-0 left-0 z-50 animate-fly-center"
+                     className="absolute top-0 left-0 animate-fly-center pointer-events-none"
                      style={{
                          '--start-x': `${flyingCard.fromX - (window.innerWidth/2)}px`,
                          '--start-y': `${flyingCard.fromY - (window.innerHeight/2)}px`,
-                         '--rot': `${flyingCard.rotation}deg`
+                         '--rot': `${flyingCard.rotation}deg`,
+                         zIndex: 100
                      } as React.CSSProperties}
                    >
                        <CardView card={flyingCard.card} size="lg" className="shadow-2xl" />
