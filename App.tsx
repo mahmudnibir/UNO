@@ -1,17 +1,18 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Card, CardColor, CardValue, Player, GameState, GameStatus 
+  Card, CardColor, CardValue, Player, GameState, GameStatus, NetworkMode, NetworkMessage 
 } from './types';
 import { 
   createDeck, shuffleDeck, getNextPlayerIndex, findBestMove, pickBestColorForBot, isValidPlay
 } from './utils/gameLogic';
 import { soundManager } from './utils/sound';
+import { mpManager } from './utils/multiplayer';
 import GameTable from './components/GameTable';
 import PlayerHand from './components/PlayerHand';
 import ColorPicker from './components/ColorPicker';
 import CardView from './components/CardView';
-import { Volume2, VolumeX, Play, Users, Trophy, Zap, User } from 'lucide-react';
+import { Volume2, VolumeX, Play, Users, Trophy, Zap, User, Copy, Wifi, WifiOff } from 'lucide-react';
 
 const INITIAL_HAND_SIZE = 7;
 
@@ -21,13 +22,85 @@ const App: React.FC = () => {
   const [pendingCardPlay, setPendingCardPlay] = useState<Card | null>(null);
   const [isSoundEnabled, setIsSoundEnabled] = useState(true);
   const [lastAction, setLastAction] = useState<string>("Game Start");
+  
+  // Multiplayer State
+  const [networkMode, setNetworkMode] = useState<NetworkMode>(NetworkMode.Offline);
+  const [roomCode, setRoomCode] = useState<string>("");
+  const [joinInput, setJoinInput] = useState<string>("");
+  const [connectedPeers, setConnectedPeers] = useState<number>(0);
+  const [isConnecting, setIsConnecting] = useState(false);
+  
+  // Settings
   const [botCount, setBotCount] = useState<number>(3);
 
-  // Sound wrapper
   const playSound = (type: 'play' | 'draw' | 'uno' | 'win' | 'turn' | 'error' | 'shuffle') => {
     if (isSoundEnabled) {
       soundManager.play(type);
     }
+  };
+
+  // Initialize Multiplayer Listeners
+  useEffect(() => {
+    mpManager.initialize((data: NetworkMessage) => {
+      
+      if (networkMode === NetworkMode.Client) {
+        // --- Client Logic ---
+        if (data.type === 'GAME_STATE') {
+          // Update local view based on Host
+          setGameState(data.payload);
+          if (data.payload.lastAction) setLastAction(data.payload.lastAction);
+          playSound('turn'); // Generic sound update
+        }
+      } else if (networkMode === NetworkMode.Host) {
+        // --- Host Logic ---
+        if (data.type === 'PLAYER_JOINED') {
+           setConnectedPeers(prev => prev + 1);
+           playSound('draw');
+        }
+        if (data.type === 'PLAY_CARD') {
+           const { playerId, card, wildColor } = data.payload;
+           // Execute move on behalf of client
+           executeMove(playerId, card, wildColor);
+        }
+        if (data.type === 'DRAW_CARD') {
+           const { playerId } = data.payload;
+           handleDrawCard(playerId);
+        }
+        if (data.type === 'SHOUT_UNO') {
+            handleShoutUno(data.payload.playerId);
+        }
+      }
+    });
+  }, [networkMode]);
+
+  // --- Hosting ---
+  const startHost = async () => {
+      setIsConnecting(true);
+      try {
+          const id = await mpManager.hostGame();
+          setRoomCode(id);
+          setNetworkMode(NetworkMode.Host);
+          setConnectedPeers(0);
+      } catch (e) {
+          alert("Failed to host game. PeerJS server might be busy.");
+          setNetworkMode(NetworkMode.Offline);
+      }
+      setIsConnecting(false);
+  };
+
+  // --- Joining ---
+  const joinGame = async () => {
+      if (!joinInput) return;
+      setIsConnecting(true);
+      try {
+          await mpManager.joinGame(joinInput);
+          setNetworkMode(NetworkMode.Client);
+          setRoomCode(joinInput);
+      } catch (e) {
+          alert("Could not connect to room: " + joinInput);
+          setNetworkMode(NetworkMode.Offline);
+      }
+      setIsConnecting(false);
   };
 
   // --- Game Initialization ---
@@ -35,22 +108,35 @@ const App: React.FC = () => {
     playSound('shuffle');
     const deck = createDeck();
     
-    const humans = [{ id: 0, name: 'You', hand: [], isBot: false, hasUno: false }];
-    const botNames = ['Sarah', 'Mike', 'Jess'];
-    const bots: Player[] = [];
+    // Setup Players
+    const players: Player[] = [];
+    
+    // Player 1 (Host/Local)
+    players.push({ id: 0, name: networkMode === NetworkMode.Client ? 'Host' : 'You', hand: [], isBot: false, hasUno: false });
 
-    for (let i = 0; i < botCount; i++) {
-        bots.push({
-            id: i + 1,
-            name: botNames[i],
-            hand: [],
-            isBot: true,
-            hasUno: false
-        });
+    if (networkMode === NetworkMode.Host) {
+        // Add connected friend as Player 2
+        if (connectedPeers > 0) {
+            players.push({ id: 1, name: 'Friend', hand: [], isBot: false, hasUno: false });
+        }
+        
+        // Fill rest with bots
+        const botNames = ['Sarah', 'Mike', 'Jess'];
+        let botIndex = 0;
+        const totalDesired = connectedPeers > 0 ? botCount + 1 : botCount; // If friend joined, adjust total
+
+        while(players.length < (connectedPeers > 0 ? 2 + Math.max(0, botCount - 1) : 1 + botCount)) {
+             players.push({ id: players.length, name: botNames[botIndex++ % 3], hand: [], isBot: true, hasUno: false });
+        }
+    } else if (networkMode === NetworkMode.Offline) {
+        // Standard Offline Setup
+        const botNames = ['Sarah', 'Mike', 'Jess'];
+        for (let i = 0; i < botCount; i++) {
+            players.push({ id: i + 1, name: botNames[i], hand: [], isBot: true, hasUno: false });
+        }
     }
 
-    const players: Player[] = [...humans, ...bots];
-
+    // Deal Cards
     players.forEach(player => {
       player.hand = deck.splice(0, INITIAL_HAND_SIZE);
     });
@@ -62,7 +148,7 @@ const App: React.FC = () => {
        startCard = deck.shift()!;
     }
 
-    setGameState({
+    const newGameState = {
       deck,
       discardPile: [startCard],
       players,
@@ -72,15 +158,36 @@ const App: React.FC = () => {
       winner: null,
       activeColor: startCard.color,
       drawStack: 0,
-      isUnoShouted: false
-    });
+      isUnoShouted: false,
+      roomId: roomCode
+    };
+
+    setGameState(newGameState);
     setLastAction("Game Started!");
     playSound('turn');
+
+    // Broadcast initial state if Host
+    if (networkMode === NetworkMode.Host) {
+        // Need to sanitize for client (client is player 1 usually if P2P logic was strict, but here we map IDs)
+        // For simplicity, we send full state and Client figures out they are Player 1
+        mpManager.broadcast({ type: 'GAME_STATE', payload: newGameState });
+    }
+  };
+
+  // --- Sync Helper ---
+  const updateGameState = (newState: GameState) => {
+      setGameState(newState);
+      if (networkMode === NetworkMode.Host) {
+          mpManager.broadcast({ type: 'GAME_STATE', payload: newState });
+      }
   };
 
   // --- Bot AI Loop ---
   useEffect(() => {
     if (!gameState || gameState.status !== GameStatus.Playing) return;
+    
+    // Only Host (or Offline) runs Bots
+    if (networkMode === NetworkMode.Client) return;
 
     const currentPlayer = gameState.players[gameState.currentPlayerIndex];
     
@@ -89,7 +196,6 @@ const App: React.FC = () => {
       const delay = Math.random() * 500 + baseDelay; 
 
       const timer = setTimeout(() => {
-        // If there is a draw stack, bot must draw
         if (gameState.drawStack > 0) {
           handleDrawCard(currentPlayer.id);
         } else {
@@ -98,14 +204,12 @@ const App: React.FC = () => {
       }, delay);
       return () => clearTimeout(timer);
     }
-  }, [gameState?.currentPlayerIndex, gameState?.drawStack, gameState?.status]);
+  }, [gameState?.currentPlayerIndex, gameState?.drawStack, gameState?.status, networkMode]);
 
   const handleBotTurn = (bot: Player) => {
     if (!gameState) return;
-    
     const { discardPile, activeColor } = gameState;
     const topCard = discardPile[discardPile.length - 1];
-    
     const bestMove = findBestMove(bot.hand, topCard, activeColor);
 
     if (bestMove) {
@@ -121,51 +225,101 @@ const App: React.FC = () => {
   };
 
   // --- Player Interactions ---
+  // Identify who "You" are based on mode
+  const myPlayerId = networkMode === NetworkMode.Client ? 1 : 0; 
+
   const handlePlayerCardClick = (card: Card) => {
     if (!gameState) return;
     
-    // Prevent playing if it's not your turn OR if you have penalty cards to draw
-    if (gameState.currentPlayerIndex !== 0) {
+    // Validate Turn
+    if (gameState.currentPlayerIndex !== myPlayerId) {
         playSound('error');
         return;
     }
     if (gameState.drawStack > 0) {
-      playSound('error'); // Must draw first
+      playSound('error'); 
       setLastAction("Must draw penalty cards!");
       return;
     }
 
+    // If Client, send request to Host
+    if (networkMode === NetworkMode.Client) {
+         if (card.color === CardColor.Wild) {
+             setPendingCardPlay(card);
+             setShowColorPicker(true);
+         } else {
+             mpManager.sendToHost({ type: 'PLAY_CARD', payload: { playerId: myPlayerId, card } });
+         }
+         return;
+    }
+
+    // If Host/Offline
     if (card.color === CardColor.Wild) {
       setPendingCardPlay(card);
       setShowColorPicker(true);
-      // Removed playSound('play') here to avoid double sound.
-      // GameTable will handle sound when discard updates.
     } else {
-      executeMove(0, card);
+      executeMove(myPlayerId, card);
     }
   };
 
   const handleColorSelect = (color: CardColor) => {
     if (pendingCardPlay) {
-      executeMove(0, pendingCardPlay, color);
+      if (networkMode === NetworkMode.Client) {
+          mpManager.sendToHost({ type: 'PLAY_CARD', payload: { playerId: myPlayerId, card: pendingCardPlay, wildColor: color } });
+      } else {
+          executeMove(myPlayerId, pendingCardPlay, color);
+      }
       setPendingCardPlay(null);
       setShowColorPicker(false);
     }
   };
 
-  const handleDrawCard = (playerId: number) => {
-    // Validation for human clicks
-    if (playerId === 0 && gameState?.currentPlayerIndex !== 0) return;
+  const handleClientDraw = () => {
+      if (networkMode === NetworkMode.Client) {
+          if (gameState?.currentPlayerIndex === myPlayerId) {
+              mpManager.sendToHost({ type: 'DRAW_CARD', payload: { playerId: myPlayerId } });
+          }
+      } else {
+          handleDrawCard(myPlayerId);
+      }
+  }
 
+  const handleShoutUno = (playerId?: number) => {
+    const id = playerId !== undefined ? playerId : myPlayerId;
+    
+    if (networkMode === NetworkMode.Client && id === myPlayerId) {
+        mpManager.sendToHost({ type: 'SHOUT_UNO', payload: { playerId: id } });
+        // Optimistic update
+        playSound('uno');
+        return;
+    }
+
+    playSound('uno');
+    setGameState(prev => {
+      if (!prev) return null;
+      const newState = {
+        ...prev,
+        isUnoShouted: true,
+        players: prev.players.map(p => p.id === id ? { ...p, hasUno: true } : p)
+      };
+      if (networkMode === NetworkMode.Host) mpManager.broadcast({ type: 'GAME_STATE', payload: newState });
+      return newState;
+    });
+    
+    const name = gameState?.players[id]?.name || "Player";
+    setLastAction(`${name} shouted UNO!`);
+  };
+
+  // --- Core Game Logic (Host Only) ---
+  const handleDrawCard = (playerId: number) => {
     playSound('draw');
     setGameState(prev => {
       if (!prev) return null;
       const newDeck = [...prev.deck];
       let newDiscard = [...prev.discardPile];
       
-      // Reshuffle if empty
       if (newDeck.length === 0) {
-        if (newDiscard.length <= 1) return prev; // Cannot draw
+        if (newDiscard.length <= 1) return prev; 
         const top = newDiscard.pop()!;
         const recycled = shuffleDeck(newDiscard);
         newDeck.push(...recycled);
@@ -178,78 +332,41 @@ const App: React.FC = () => {
         p.id === playerId ? { ...p, hand: [...p.hand, drawnCard], hasUno: false } : p
       );
 
-      // Logic for Draw Stack (Penalties)
+      let nextState: GameState;
+      const playerName = prev.players[playerId].name;
+
       if (prev.drawStack > 0) {
         const newStack = prev.drawStack - 1;
+        setLastAction(`${playerName} drawing penalty (${newStack} left)`);
         
-        // Log
-        setLastAction(`${prev.players[playerId].name} drawing penalty (${newStack} left)`);
-
-        // If stack is cleared, Turn ENDS immediately for the victim
         if (newStack === 0) {
            const nextIndex = getNextPlayerIndex(prev.currentPlayerIndex, prev.players.length, prev.direction);
-           return {
-             ...prev,
-             deck: newDeck,
-             discardPile: newDiscard,
-             players: newPlayers,
-             drawStack: 0,
-             currentPlayerIndex: nextIndex, // Turn passes after penalty paid
-           };
+           nextState = { ...prev, deck: newDeck, discardPile: newDiscard, players: newPlayers, drawStack: 0, currentPlayerIndex: nextIndex };
         } else {
-           // Still needs to draw more
-           return {
-             ...prev,
-             deck: newDeck,
-             discardPile: newDiscard,
-             players: newPlayers,
-             drawStack: newStack,
-             // Player index stays same until stack is 0
-           };
+           nextState = { ...prev, deck: newDeck, discardPile: newDiscard, players: newPlayers, drawStack: newStack };
         }
+      } else {
+          setLastAction(`${playerName} drew a card`);
+          const nextIndex = getNextPlayerIndex(prev.currentPlayerIndex, prev.players.length, prev.direction);
+          nextState = { ...prev, deck: newDeck, discardPile: newDiscard, players: newPlayers, currentPlayerIndex: nextIndex };
       }
 
-      // Normal Draw (No Stack)
-      setLastAction(`${prev.players[playerId].name} drew a card`);
-      
-      const nextIndex = getNextPlayerIndex(prev.currentPlayerIndex, prev.players.length, prev.direction);
-
-      return {
-        ...prev,
-        deck: newDeck,
-        discardPile: newDiscard,
-        players: newPlayers,
-        currentPlayerIndex: nextIndex
-      };
+      if (networkMode === NetworkMode.Host) mpManager.broadcast({ type: 'GAME_STATE', payload: nextState });
+      return nextState;
     });
-  };
-
-  const handleShoutUno = () => {
-    playSound('uno');
-    setGameState(prev => {
-      if (!prev) return null;
-      return {
-        ...prev,
-        isUnoShouted: true,
-        players: prev.players.map(p => p.id === 0 ? { ...p, hasUno: true } : p)
-      };
-    });
-    setLastAction("You shouted UNO!");
   };
 
   const executeMove = (playerId: number, card: Card, wildColor?: CardColor) => {
-    // Removed playSound('play') here. GameTable handles the 'whoosh' and 'land'.
-    
     setGameState(prev => {
       if (!prev) return null;
 
       // Check UNO failure
-      let penaltyCards: Card[] = [];
       const player = prev.players[playerId];
-      if (playerId === 0 && player.hand.length === 2 && !player.hasUno) {
-         if (Math.random() < 0.5) { // 50% chance to get caught
+      if (player.hand.length === 2 && !player.hasUno) {
+         if (Math.random() < 0.5) { 
              setLastAction("Forgot to shout UNO! +2 cards");
              playSound('error');
+             // In a real implementation, we would trigger a +2 penalty here
          }
       }
 
@@ -261,26 +378,20 @@ const App: React.FC = () => {
         return p;
       });
 
-      // Winner Check
       if (newPlayers[playerId].hand.length === 0) {
         playSound('win');
-        return {
-          ...prev,
-          players: newPlayers,
-          discardPile: [...prev.discardPile, card],
-          status: GameStatus.GameOver,
-          winner: prev.players[playerId],
-        };
+        const winState = { ...prev, players: newPlayers, discardPile: [...prev.discardPile, card], status: GameStatus.GameOver, winner: prev.players[playerId] };
+        if (networkMode === NetworkMode.Host) mpManager.broadcast({ type: 'GAME_STATE', payload: winState });
+        return winState;
       }
 
       if (newPlayers[playerId].hand.length === 1) {
-          if (playerId !== 0) playSound('uno');
+           playSound('uno');
       }
 
-      // Resolve Card Effects
       let nextDirection = prev.direction;
       let nextActiveColor = wildColor || card.color;
-      let skipNext = false; // Pure skip
+      let skipNext = false;
       let stackToAdd = 0;
       let actionText = `${prev.players[playerId].name} played ${card.value}`;
 
@@ -288,10 +399,7 @@ const App: React.FC = () => {
         nextDirection = (nextDirection * -1) as 1 | -1;
         actionText = "Reverse!";
         playSound('turn');
-        // In 2 player game, Reverse acts like Skip
-        if (prev.players.length === 2) {
-            skipNext = true; // But we handle skip by logic below
-        }
+        if (prev.players.length === 2) skipNext = true;
       } else if (card.value === CardValue.Skip) {
         skipNext = true;
         actionText = "Skip!";
@@ -308,169 +416,180 @@ const App: React.FC = () => {
 
       setLastAction(actionText);
 
-      // Calculate Next Player
       let nextIndex = getNextPlayerIndex(prev.currentPlayerIndex, prev.players.length, nextDirection);
 
-      // Apply Effects
+      let nextState: GameState;
+
       if (stackToAdd > 0) {
-          // If we add to stack, the next player becomes the victim.
-          // They DO NOT get skipped immediately. They get the turn, but are locked into drawing.
-          return {
-              ...prev,
-              discardPile: [...prev.discardPile, card],
-              players: newPlayers,
-              currentPlayerIndex: nextIndex,
-              direction: nextDirection,
-              activeColor: nextActiveColor,
-              drawStack: prev.drawStack + stackToAdd,
+          nextState = {
+              ...prev, discardPile: [...prev.discardPile, card], players: newPlayers, 
+              currentPlayerIndex: nextIndex, direction: nextDirection, activeColor: nextActiveColor, drawStack: prev.drawStack + stackToAdd
+          };
+      } else {
+          if (skipNext) nextIndex = getNextPlayerIndex(nextIndex, prev.players.length, nextDirection);
+          nextState = {
+             ...prev, discardPile: [...prev.discardPile, card], players: newPlayers,
+             currentPlayerIndex: nextIndex, direction: nextDirection, activeColor: nextActiveColor
           };
       }
 
-      if (skipNext) {
-        nextIndex = getNextPlayerIndex(nextIndex, prev.players.length, nextDirection);
-      }
-
-      return {
-        ...prev,
-        discardPile: [...prev.discardPile, card],
-        players: newPlayers,
-        currentPlayerIndex: nextIndex,
-        direction: nextDirection,
-        activeColor: nextActiveColor
-      };
+      if (networkMode === NetworkMode.Host) mpManager.broadcast({ type: 'GAME_STATE', payload: nextState });
+      return nextState;
     });
   };
 
-  // --- UI Helpers ---
+  // --- Valid Move Check ---
   const hasValidMove = (() => {
     if (!gameState) return false;
-    if (gameState.drawStack > 0) return false; // Must draw if stack exists
-    const playerHand = gameState.players[0].hand;
+    if (gameState.drawStack > 0) return false; 
+    const playerHand = gameState.players[myPlayerId]?.hand;
+    if (!playerHand) return false;
     const topCard = gameState.discardPile[gameState.discardPile.length - 1];
     return playerHand.some(c => isValidPlay(c, topCard, gameState.activeColor));
   })();
 
   const mustDraw = gameState 
-    ? (gameState.currentPlayerIndex === 0 && (!hasValidMove || gameState.drawStack > 0))
+    ? (gameState.currentPlayerIndex === myPlayerId && (!hasValidMove || gameState.drawStack > 0))
     : false;
 
+  // --- Render Lobby ---
   if (!gameState) {
-      // Mock cards for lobby background
-      const lobbyCards: {id: string, color: CardColor, value: CardValue, rot: number, x: string, y: string, delay: string}[] = [
+      const lobbyCards: any[] = [
         { id: 'l1', color: CardColor.Red, value: CardValue.DrawTwo, rot: -15, x: '10%', y: '20%', delay: '0s' },
         { id: 'l2', color: CardColor.Blue, value: CardValue.Reverse, rot: 15, x: '85%', y: '15%', delay: '1s' },
         { id: 'l3', color: CardColor.Yellow, value: CardValue.Wild, rot: -10, x: '20%', y: '80%', delay: '2s' },
-        { id: 'l4', color: CardColor.Green, value: CardValue.Seven, rot: 20, x: '80%', y: '75%', delay: '3s' },
-        { id: 'l5', color: CardColor.Wild, value: CardValue.WildDrawFour, rot: 5, x: '50%', y: '15%', delay: '0.5s' },
       ];
 
       return (
           <div className="h-full w-full flex items-center justify-center bg-[#0f172a] relative overflow-hidden">
-            {/* Dynamic Background */}
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-slate-800 to-black opacity-80"></div>
-            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5"></div>
-
-            {/* Floating Cards */}
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(30,41,59,1)_0%,_rgba(15,23,42,1)_100%)]"></div>
             {lobbyCards.map((c) => (
-               <div 
-                 key={c.id} 
-                 className="absolute animate-float blur-sm opacity-60 hover:opacity-100 hover:blur-0 transition-all duration-500"
-                 style={{ 
-                   left: c.x, 
-                   top: c.y, 
-                   '--rot': `${c.rot}deg`,
-                   animationDelay: c.delay 
-                 } as React.CSSProperties}
-               >
-                  <CardView card={c} size="xl" className="shadow-2xl transform scale-75 md:scale-100" />
+               <div key={c.id} className="absolute animate-float blur-sm opacity-60"
+                 style={{ left: c.x, top: c.y, '--rot': `${c.rot}deg` } as any}>
+                  <CardView card={c} size="xl" className="shadow-2xl transform scale-75" />
                </div>
             ))}
 
-            {/* Main Content */}
             <div className="relative z-10 flex flex-col items-center animate-pop max-w-lg w-full px-4">
-                
-                {/* Logo */}
                 <div className="relative mb-8 group cursor-default">
-                    <div className="absolute inset-0 bg-yellow-400 blur-[60px] opacity-20 rounded-full group-hover:opacity-30 transition-opacity"></div>
-                    <h1 className="text-[6rem] md:text-[10rem] font-black text-transparent bg-clip-text bg-gradient-to-b from-red-500 to-red-700 drop-shadow-[0_10px_10px_rgba(0,0,0,0.8)] leading-none transform -rotate-3 hover:scale-105 transition-transform duration-500">
+                    <h1 className="text-[6rem] md:text-[9rem] font-black text-transparent bg-clip-text bg-gradient-to-b from-red-500 to-red-700 drop-shadow-[0_10px_10px_rgba(0,0,0,0.8)] leading-none transform -rotate-3">
                       UNO
                     </h1>
-                    <div className="absolute -bottom-2 md:-bottom-6 left-1/2 -translate-x-1/2 bg-yellow-400 text-black font-black text-xl md:text-3xl px-4 py-1 transform -rotate-2 skew-x-[-10deg] border-4 border-black shadow-xl tracking-widest">
+                    <div className="absolute -bottom-2 md:-bottom-4 left-1/2 -translate-x-1/2 bg-yellow-400 text-black font-black text-xl md:text-3xl px-4 py-1 transform -rotate-2 border-4 border-black shadow-xl tracking-widest">
                       MASTER
                     </div>
                 </div>
 
-                {/* Opponent Selector */}
-                <div className="w-full mb-8 bg-slate-900/50 backdrop-blur-md rounded-2xl p-4 border border-white/10">
-                    <h3 className="text-white/60 text-sm font-bold uppercase tracking-widest mb-4 text-center">Select Opponents</h3>
-                    <div className="flex justify-center gap-4">
-                        {[1, 2, 3].map(count => (
-                            <button 
-                                key={count}
-                                onClick={() => setBotCount(count)}
-                                className={`
-                                    flex flex-col items-center gap-2 px-4 py-3 rounded-xl transition-all w-24
-                                    ${botCount === count 
-                                        ? 'bg-red-600 text-white shadow-lg scale-105 ring-2 ring-red-400' 
-                                        : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white'
-                                    }
-                                `}
-                            >
-                                <div className="flex -space-x-2">
-                                    {Array.from({length: count}).map((_, i) => (
-                                        <User key={i} size={16} />
-                                    ))}
-                                </div>
-                                <span className="font-bold text-lg">{count}</span>
-                            </button>
-                        ))}
-                    </div>
+                {/* Tabs */}
+                <div className="flex gap-2 mb-6 p-1 bg-slate-800/50 rounded-xl border border-white/10">
+                    <button onClick={() => setNetworkMode(NetworkMode.Offline)} className={`px-6 py-2 rounded-lg font-bold transition-all ${networkMode === NetworkMode.Offline ? 'bg-white text-black' : 'text-white/60 hover:text-white'}`}>Offline</button>
+                    <button onClick={() => setNetworkMode(NetworkMode.Host)} className={`px-6 py-2 rounded-lg font-bold transition-all ${networkMode !== NetworkMode.Offline ? 'bg-white text-black' : 'text-white/60 hover:text-white'}`}>Online</button>
                 </div>
 
-                {/* Play Button */}
-                <button 
-                  onClick={startGame} 
-                  className="w-full group relative px-12 py-6 bg-gradient-to-br from-red-600 to-red-800 rounded-3xl shadow-[0_10px_30px_rgba(220,38,38,0.4)] transition-all hover:scale-105 active:scale-95 overflow-hidden"
-                >
-                    <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20"></div>
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
-                    
-                    <div className="relative flex items-center justify-center gap-4">
-                      <div className="bg-white/20 p-3 rounded-full backdrop-blur-sm">
-                        <Play size={32} fill="currentColor" className="text-white ml-1" />
-                      </div>
-                      <div className="text-left">
-                        <div className="text-white font-black text-3xl tracking-tight leading-none">PLAY NOW</div>
-                        <div className="text-red-200 text-sm font-bold uppercase tracking-widest">VS {botCount} BOT{botCount > 1 ? 'S' : ''}</div>
-                      </div>
+                {/* Mode Specific UI */}
+                {networkMode === NetworkMode.Offline ? (
+                    <div className="w-full bg-slate-900/50 backdrop-blur-md rounded-2xl p-6 border border-white/10 mb-6 animate-pop">
+                        <h3 className="text-white/60 text-sm font-bold uppercase tracking-widest mb-4 text-center">Single Player</h3>
+                        <div className="flex justify-center gap-4 mb-6">
+                            {[1, 2, 3].map(count => (
+                                <button key={count} onClick={() => setBotCount(count)} className={`flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all w-20 ${botCount === count ? 'bg-red-600 text-white shadow-lg' : 'bg-white/5 text-white/50'}`}>
+                                    <Users size={16} />
+                                    <span className="font-bold">{count} Bot{count > 1 ? 's' : ''}</span>
+                                </button>
+                            ))}
+                        </div>
+                        <button onClick={startGame} className="w-full py-4 bg-gradient-to-r from-red-600 to-orange-600 rounded-xl font-black text-xl shadow-lg hover:scale-105 transition-transform">START GAME</button>
                     </div>
-                </button>
+                ) : (
+                   <div className="w-full bg-slate-900/50 backdrop-blur-md rounded-2xl p-6 border border-white/10 mb-6 animate-pop">
+                       <div className="flex flex-col gap-4">
+                          {/* Host Section */}
+                          {networkMode === NetworkMode.Host && (
+                             <div className="text-center">
+                                {roomCode ? (
+                                    <div className="mb-4">
+                                        <p className="text-white/60 text-xs font-bold uppercase mb-2">Room Code</p>
+                                        <div className="flex items-center justify-center gap-2 bg-black/40 p-3 rounded-lg border border-yellow-400/30 cursor-pointer hover:bg-black/60" onClick={() => navigator.clipboard.writeText(roomCode)}>
+                                            <span className="text-2xl font-mono text-yellow-400 tracking-widest">{roomCode}</span>
+                                            <Copy size={16} className="text-white/40" />
+                                        </div>
+                                        <p className="text-green-400 text-sm mt-2 font-bold animate-pulse">
+                                            {connectedPeers > 0 ? `${connectedPeers} Friend Joined!` : "Waiting for friend..."}
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <button onClick={startHost} disabled={isConnecting} className="w-full py-3 bg-indigo-600 rounded-xl font-bold shadow-lg hover:bg-indigo-500 mb-4">
+                                        {isConnecting ? "Creating..." : "Create Room"}
+                                    </button>
+                                )}
+                                {roomCode && (
+                                   <button onClick={startGame} className="w-full py-4 bg-green-600 rounded-xl font-black text-xl shadow-lg hover:scale-105 transition-transform">
+                                       START GAME
+                                   </button>
+                                )}
+                             </div>
+                          )}
 
-                {/* Settings / Footer */}
-                <div className="mt-8 flex gap-6">
-                   <button onClick={() => setIsSoundEnabled(!isSoundEnabled)} className="glass-panel px-6 py-3 rounded-full flex items-center gap-2 text-white hover:bg-white/10 transition-colors">
-                      {isSoundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
-                      <span className="font-bold text-sm">{isSoundEnabled ? 'SOUND ON' : 'SOUND OFF'}</span>
-                   </button>
-                </div>
+                          {/* Client Join Section */}
+                          {networkMode !== NetworkMode.Host && (
+                              <div className="text-center">
+                                  <div className="flex gap-2 mb-4">
+                                    <button onClick={() => setNetworkMode(NetworkMode.Client)} className={`flex-1 py-2 rounded-lg text-sm font-bold ${networkMode === NetworkMode.Client ? 'bg-blue-600 text-white' : 'bg-white/5 text-white/50'}`}>Join Room</button>
+                                    <button onClick={() => setNetworkMode(NetworkMode.Host)} className={`flex-1 py-2 rounded-lg text-sm font-bold ${networkMode === NetworkMode.Host ? 'bg-blue-600 text-white' : 'bg-white/5 text-white/50'}`}>Create Room</button>
+                                  </div>
+
+                                  {networkMode === NetworkMode.Client && (
+                                      <>
+                                      <input 
+                                        type="text" 
+                                        placeholder="Enter Room Code" 
+                                        className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-center font-mono text-lg mb-4 text-white focus:border-blue-500 outline-none"
+                                        value={joinInput}
+                                        onChange={(e) => setJoinInput(e.target.value)}
+                                      />
+                                      {isConnecting ? (
+                                         <div className="text-yellow-400 font-bold animate-pulse">Connecting...</div>
+                                      ) : (
+                                         <button onClick={joinGame} className="w-full py-3 bg-blue-600 rounded-xl font-bold shadow-lg hover:scale-105 transition-transform">
+                                            JOIN GAME
+                                         </button>
+                                      )}
+                                      </>
+                                  )}
+                              </div>
+                          )}
+                       </div>
+                   </div>
+                )}
+                
+                <div className="text-white/30 text-xs font-mono">v2.0 • Multiplayer Beta</div>
             </div>
           </div>
       );
   }
 
+  // --- Game Render ---
   return (
     <div className="h-full w-full overflow-hidden relative flex flex-col bg-[#0f172a]">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(30,41,59,1)_0%,_rgba(15,23,42,1)_100%)]"></div>
       
-      {/* Controls */}
-      <div className="absolute top-4 left-4 right-4 z-50 flex justify-between">
-         <button onClick={() => setGameState(null)} className="glass-panel px-4 py-2 rounded-full text-sm font-bold hover:bg-red-500/50 transition-colors">EXIT</button>
-         <button onClick={() => setIsSoundEnabled(!isSoundEnabled)} className="glass-panel p-2 rounded-full hover:bg-white/20">
-           {isSoundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
-         </button>
+      {/* Header */}
+      <div className="absolute top-4 left-4 right-4 z-50 flex justify-between items-start">
+         <button onClick={() => { mpManager.disconnect(); setGameState(null); }} className="glass-panel px-4 py-2 rounded-full text-sm font-bold hover:bg-red-500/50 transition-colors">EXIT</button>
+         
+         <div className="flex gap-4">
+             {gameState.roomId && (
+                 <div className="glass-panel px-4 py-2 rounded-full flex items-center gap-2">
+                    <Wifi size={16} className="text-green-400" />
+                    <span className="text-xs font-mono text-white/80">ROOM: {gameState.roomId}</span>
+                 </div>
+             )}
+             <button onClick={() => setIsSoundEnabled(!isSoundEnabled)} className="glass-panel p-2 rounded-full hover:bg-white/20">
+                {isSoundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
+             </button>
+         </div>
       </div>
 
-      {/* Game Table */}
       <GameTable 
         deckCount={gameState.deck.length}
         discardTop={gameState.discardPile[gameState.discardPile.length - 1]}
@@ -478,27 +597,26 @@ const App: React.FC = () => {
         direction={gameState.direction}
         players={gameState.players}
         currentPlayerIndex={gameState.currentPlayerIndex}
-        onDrawCard={() => handleDrawCard(0)}
+        onDrawCard={handleClientDraw}
         status={gameState.status}
         winner={gameState.winner}
-        onRestart={startGame}
+        onRestart={() => setGameState(null)}
         lastAction={lastAction}
         mustDraw={mustDraw}
       />
 
-      {/* Player Hand */}
       <PlayerHand 
-        hand={gameState.players[0].hand}
-        isCurrentTurn={gameState.currentPlayerIndex === 0}
+        hand={gameState.players[myPlayerId]?.hand || []}
+        isCurrentTurn={gameState.currentPlayerIndex === myPlayerId}
         activeColor={gameState.activeColor}
         discardTop={gameState.discardPile[gameState.discardPile.length - 1]}
         onPlayCard={handlePlayerCardClick}
-        onShoutUno={handleShoutUno}
-        hasShoutedUno={gameState.players[0].hasUno}
+        onShoutUno={() => handleShoutUno()}
+        hasShoutedUno={gameState.players[myPlayerId]?.hasUno || false}
         mustDraw={mustDraw}
       />
 
-      {/* Draw Stack Indicator (Overlay) - Moved Lower */}
+      {/* Draw Stack Indicator */}
       {gameState.drawStack > 0 && (
           <div className="absolute top-[65%] left-1/2 -translate-x-1/2 -translate-y-1/2 z-40 pointer-events-none">
              <div className="bg-red-600 text-white font-black text-xl px-6 py-2 rounded-full shadow-xl animate-bounce border-2 border-white">

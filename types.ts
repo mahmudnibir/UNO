@@ -1,3 +1,4 @@
+
 export enum CardColor {
   Red = 'RED',
   Blue = 'BLUE',
@@ -57,4 +58,19 @@ export interface GameState {
   activeColor: CardColor; // The color that must be matched (handles Wilds)
   drawStack: number; // Accumulates +2 or +4 penalties
   isUnoShouted: boolean; // UI state for player
+  roomId?: string; // Multiplayer room ID
+}
+
+// --- Multiplayer Types ---
+
+export enum NetworkMode {
+  Offline = 'OFFLINE',
+  Host = 'HOST',
+  Client = 'CLIENT'
+}
+
+export interface NetworkMessage {
+  type: 'GAME_STATE' | 'PLAY_CARD' | 'DRAW_CARD' | 'SHOUT_UNO' | 'JOIN_REQUEST' | 'PLAYER_JOINED';
+  payload?: any;
+  playerId?: number;
 }
