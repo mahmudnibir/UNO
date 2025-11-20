@@ -8,22 +8,85 @@ class SoundManager {
     }
   }
 
-  play(type: 'play' | 'draw' | 'uno' | 'win' | 'turn' | 'error' | 'shuffle') {
+  play(type: 'play' | 'draw' | 'uno' | 'win' | 'turn' | 'error' | 'shuffle' | 'whoosh' | 'land') {
     try {
       this.init();
       if (!this.ctx) return;
       if (this.ctx.state === 'suspended') this.ctx.resume();
 
       const t = this.ctx.currentTime;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
+      
+      // Common gain node for master volume if needed
+      const masterGain = this.ctx.createGain();
+      masterGain.connect(this.ctx.destination);
+      masterGain.gain.value = 0.8;
 
       switch (type) {
+        case 'whoosh':
+            // Card flying through air - White noise filter sweep
+            const wOsc = this.ctx.createOscillator();
+            const wGain = this.ctx.createGain();
+            const filter = this.ctx.createBiquadFilter();
+            
+            // Create noise buffer
+            const bSize = this.ctx.sampleRate * 0.5;
+            const buffer = this.ctx.createBuffer(1, bSize, this.ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bSize; i++) data[i] = Math.random() * 2 - 1;
+            
+            const noise = this.ctx.createBufferSource();
+            noise.buffer = buffer;
+            
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(200, t);
+            filter.frequency.exponentialRampToValueAtTime(1200, t + 0.3);
+            
+            wGain.gain.setValueAtTime(0.3, t);
+            wGain.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
+            
+            noise.connect(filter);
+            filter.connect(wGain);
+            wGain.connect(masterGain);
+            
+            noise.start(t);
+            break;
+
+        case 'land':
+            // Card hitting the pile - Crisp snap
+            const lOsc = this.ctx.createOscillator();
+            const lGain = this.ctx.createGain();
+            
+            lOsc.frequency.setValueAtTime(150, t);
+            lOsc.frequency.exponentialRampToValueAtTime(40, t + 0.1);
+            
+            lGain.gain.setValueAtTime(0.5, t);
+            lGain.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+            
+            lOsc.connect(lGain);
+            lGain.connect(masterGain);
+            lOsc.start(t);
+            lOsc.stop(t + 0.1);
+            
+            // High frequency snap
+            const snap = this.ctx.createOscillator();
+            const snapGain = this.ctx.createGain();
+            snap.type = 'triangle';
+            snap.frequency.setValueAtTime(3000, t);
+            snap.frequency.exponentialRampToValueAtTime(500, t + 0.05);
+            snapGain.gain.setValueAtTime(0.1, t);
+            snapGain.gain.exponentialRampToValueAtTime(0.01, t + 0.05);
+            snap.connect(snapGain);
+            snapGain.connect(masterGain);
+            snap.start(t);
+            snap.stop(t + 0.05);
+            break;
+
         case 'play':
-          // "Thwip" sound
+          // Keeping generic play for other interactions if needed
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.connect(gain);
+          gain.connect(masterGain);
           osc.type = 'sine';
           osc.frequency.setValueAtTime(600, t);
           osc.frequency.exponentialRampToValueAtTime(100, t + 0.1);
@@ -32,32 +95,40 @@ class SoundManager {
           osc.start(t);
           osc.stop(t + 0.1);
           break;
+
         case 'draw':
-          // "Zip" sound
-          osc.type = 'triangle';
-          osc.frequency.setValueAtTime(400, t);
-          osc.frequency.linearRampToValueAtTime(600, t + 0.1);
-          gain.gain.setValueAtTime(0.15, t);
-          gain.gain.linearRampToValueAtTime(0.01, t + 0.1);
-          osc.start(t);
-          osc.stop(t + 0.1);
+          const dOsc = this.ctx.createOscillator();
+          const dGain = this.ctx.createGain();
+          dOsc.connect(dGain);
+          dGain.connect(masterGain);
+          dOsc.type = 'triangle';
+          dOsc.frequency.setValueAtTime(400, t);
+          dOsc.frequency.linearRampToValueAtTime(600, t + 0.1);
+          dGain.gain.setValueAtTime(0.15, t);
+          dGain.gain.linearRampToValueAtTime(0.01, t + 0.1);
+          dOsc.start(t);
+          dOsc.stop(t + 0.1);
           break;
+
         case 'turn':
-          // Soft bell
-          osc.type = 'sine';
-          osc.frequency.setValueAtTime(880, t);
-          gain.gain.setValueAtTime(0.1, t);
-          gain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
-          osc.start(t);
-          osc.stop(t + 0.5);
+          const tOsc = this.ctx.createOscillator();
+          const tGain = this.ctx.createGain();
+          tOsc.connect(tGain);
+          tGain.connect(masterGain);
+          tOsc.type = 'sine';
+          tOsc.frequency.setValueAtTime(880, t);
+          tGain.gain.setValueAtTime(0.1, t);
+          tGain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+          tOsc.start(t);
+          tOsc.stop(t + 0.5);
           break;
+
         case 'uno':
-          // Alert Arpeggio
           [440, 554, 659].forEach((freq, i) => {
               const o = this.ctx!.createOscillator();
               const g = this.ctx!.createGain();
               o.connect(g);
-              g.connect(this.ctx!.destination);
+              g.connect(masterGain);
               o.type = 'square';
               o.frequency.setValueAtTime(freq, t + i * 0.08);
               g.gain.setValueAtTime(0.05, t + i * 0.08);
@@ -66,13 +137,13 @@ class SoundManager {
               o.stop(t + i * 0.08 + 0.3);
           });
           break;
+
         case 'win':
-          // Victory Major Chord
           [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
               const o = this.ctx!.createOscillator();
               const g = this.ctx!.createGain();
               o.connect(g);
-              g.connect(this.ctx!.destination);
+              g.connect(masterGain);
               o.type = 'sawtooth';
               o.frequency.setValueAtTime(freq, t);
               g.gain.setValueAtTime(0.05, t);
@@ -81,31 +152,34 @@ class SoundManager {
               o.stop(t + 1.5);
           });
           break;
+
          case 'error':
-          osc.type = 'sawtooth';
-          osc.frequency.setValueAtTime(150, t);
-          osc.frequency.linearRampToValueAtTime(100, t + 0.15);
-          gain.gain.setValueAtTime(0.1, t);
-          gain.gain.linearRampToValueAtTime(0.01, t + 0.15);
-          osc.start(t);
-          osc.stop(t + 0.15);
+          const eOsc = this.ctx.createOscillator();
+          const eGain = this.ctx.createGain();
+          eOsc.connect(eGain);
+          eGain.connect(masterGain);
+          eOsc.type = 'sawtooth';
+          eOsc.frequency.setValueAtTime(150, t);
+          eOsc.frequency.linearRampToValueAtTime(100, t + 0.15);
+          eGain.gain.setValueAtTime(0.1, t);
+          eGain.gain.linearRampToValueAtTime(0.01, t + 0.15);
+          eOsc.start(t);
+          eOsc.stop(t + 0.15);
           break;
+
          case 'shuffle':
-          // Noise burst
-          const bufferSize = this.ctx.sampleRate * 0.2;
-          const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-          const data = buffer.getChannelData(0);
-          for (let i = 0; i < bufferSize; i++) {
-            data[i] = Math.random() * 2 - 1;
-          }
-          const noise = this.ctx.createBufferSource();
-          noise.buffer = buffer;
-          const noiseGain = this.ctx.createGain();
-          noiseGain.gain.setValueAtTime(0.2, t);
-          noiseGain.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
-          noise.connect(noiseGain);
-          noiseGain.connect(this.ctx.destination);
-          noise.start(t);
+          const buffSize = this.ctx.sampleRate * 0.2;
+          const buff = this.ctx.createBuffer(1, buffSize, this.ctx.sampleRate);
+          const dat = buff.getChannelData(0);
+          for (let i = 0; i < buffSize; i++) dat[i] = Math.random() * 2 - 1;
+          const n = this.ctx.createBufferSource();
+          n.buffer = buff;
+          const nGain = this.ctx.createGain();
+          nGain.gain.setValueAtTime(0.2, t);
+          nGain.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
+          n.connect(nGain);
+          nGain.connect(masterGain);
+          n.start(t);
           break;
       }
     } catch (e) {

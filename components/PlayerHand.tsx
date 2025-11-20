@@ -12,6 +12,7 @@ interface PlayerHandProps {
   onPlayCard: (card: Card) => void;
   onShoutUno: () => void;
   hasShoutedUno: boolean;
+  mustDraw: boolean;
 }
 
 const PlayerHand: React.FC<PlayerHandProps> = ({ 
@@ -21,11 +22,13 @@ const PlayerHand: React.FC<PlayerHandProps> = ({
   discardTop, 
   onPlayCard,
   onShoutUno,
-  hasShoutedUno
+  hasShoutedUno,
+  mustDraw
 }) => {
   
   const isPlayable = (card: Card) => {
     if (!isCurrentTurn) return false;
+    if (mustDraw) return false; // Disable all cards if penalty is active
     if (card.color === CardColor.Wild) return true;
     if (card.color === activeColor) return true;
     if (card.value === discardTop.value) return true;
@@ -109,14 +112,14 @@ const PlayerHand: React.FC<PlayerHandProps> = ({
                     card={card} 
                     size="xl" 
                     playable={canPlay}
-                    disabled={!canPlay && isCurrentTurn} 
+                    disabled={!canPlay} // Disabled purely on playable state
                     onClick={() => canPlay && onPlayCard(card)}
                     hoverEffect={true}
                     className={`
                         shadow-2xl 
                         ${canPlay 
                             ? 'brightness-110 hover:shadow-[0_0_40px_rgba(255,255,255,0.5)]' 
-                            : isCurrentTurn ? 'grayscale-[0.6] opacity-60 brightness-75' : 'brightness-90'
+                            : 'grayscale-[0.8] opacity-60 brightness-50' // Make non-playable cards much darker
                         }
                     `}
                     />

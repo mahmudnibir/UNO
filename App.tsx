@@ -138,7 +138,8 @@ const App: React.FC = () => {
     if (card.color === CardColor.Wild) {
       setPendingCardPlay(card);
       setShowColorPicker(true);
-      playSound('play');
+      // Removed playSound('play') here to avoid double sound.
+      // GameTable will handle sound when discard updates.
     } else {
       executeMove(0, card);
     }
@@ -237,7 +238,8 @@ const App: React.FC = () => {
   };
 
   const executeMove = (playerId: number, card: Card, wildColor?: CardColor) => {
-    playSound('play');
+    // Removed playSound('play') here. GameTable handles the 'whoosh' and 'land'.
+    
     setGameState(prev => {
       if (!prev) return null;
 
@@ -493,11 +495,12 @@ const App: React.FC = () => {
         onPlayCard={handlePlayerCardClick}
         onShoutUno={handleShoutUno}
         hasShoutedUno={gameState.players[0].hasUno}
+        mustDraw={mustDraw}
       />
 
-      {/* Draw Stack Indicator (Overlay) */}
+      {/* Draw Stack Indicator (Overlay) - Moved Lower */}
       {gameState.drawStack > 0 && (
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-40 pointer-events-none mt-16">
+          <div className="absolute top-[65%] left-1/2 -translate-x-1/2 -translate-y-1/2 z-40 pointer-events-none">
              <div className="bg-red-600 text-white font-black text-xl px-6 py-2 rounded-full shadow-xl animate-bounce border-2 border-white">
                 PENALTY: +{gameState.drawStack}
              </div>

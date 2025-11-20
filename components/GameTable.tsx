@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import CardView from './CardView';
 import { Card, CardColor, Player, GameStatus } from '../types';
 import { Bot, Trophy, RotateCw } from 'lucide-react';
+import { soundManager } from '../utils/sound';
 
 interface GameTableProps {
   deckCount: number;
@@ -43,48 +44,54 @@ const GameTable: React.FC<GameTableProps> = ({
 }) => {
   
   const [flyingCard, setFlyingCard] = useState<FlyingCardState | null>(null);
-  const [prevDiscardId, setPrevDiscardId] = useState<string>(discardTop.id);
+  // Holds the card that should be visually displayed on the pile
+  // It waits for animation to finish before updating to the new 'discardTop'
+  const [visualDiscard, setVisualDiscard] = useState<Card>(discardTop);
 
   useEffect(() => {
-    if (discardTop.id !== prevDiscardId) {
-      // Determine source position based on who played
+    // When the actual game state discard changes...
+    if (discardTop.id !== visualDiscard.id) {
+      
+      // 1. Play Whoosh Sound immediately
+      soundManager.play('whoosh');
+
+      // 2. Determine start position for animation
       const w = window.innerWidth;
       const h = window.innerHeight;
       let startX = w / 2;
       let startY = h + 100; // Default bottom (Player)
       let rot = 0;
 
-      // Determine positions based on bot layout (matching renderBots logic)
-      // Side bots are at top: 25%
-      const sideBotY = h * 0.25;
+      // Updated Y position to match new bot placement (15% from top)
+      const sideBotY = h * 0.15; 
       
       if (lastAction.includes("Sarah")) { 
-         // Sarah usually Left
-         startX = 80; startY = sideBotY; rot = 90; 
+         startX = w * 0.05 + 30; startY = sideBotY + 30; rot = 90; 
       } else if (lastAction.includes("Mike")) { 
-         // Mike usually Top
-         startX = w / 2; startY = 50; rot = 180; 
+         startX = w / 2; startY = h * 0.02 + 30; rot = 180; 
       } else if (lastAction.includes("Jess")) { 
-         // Jess usually Right
-         startX = w - 80; startY = sideBotY; rot = -90; 
+         startX = w * 0.95 - 30; startY = sideBotY + 30; rot = -90; 
       } else if (lastAction.includes("You")) { 
          startX = w / 2; startY = h - 100; rot = 0; 
       }
 
+      // 3. Start Animation with the NEW card
       setFlyingCard({
         id: Math.random().toString(),
-        card: discardTop,
+        card: discardTop, // The card flying IS the new card
         fromX: startX,
         fromY: startY,
         rotation: rot
       });
-
-      setPrevDiscardId(discardTop.id);
       
-      // Reset animation - matched to 1.2s CSS animation
-      setTimeout(() => setFlyingCard(null), 1200);
+      // 4. Wait for animation to land before updating static pile
+      setTimeout(() => {
+        setFlyingCard(null);
+        setVisualDiscard(discardTop);
+        soundManager.play('land'); // Snap sound when it lands
+      }, 700); // Matches CSS animation duration
     }
-  }, [discardTop.id, lastAction]);
+  }, [discardTop.id, lastAction, visualDiscard.id]);
 
 
   const getAmbientGlow = () => {
@@ -108,22 +115,22 @@ const GameTable: React.FC<GameTableProps> = ({
         
         {/* Avatar */}
         <div className={`
-          w-16 h-16 md:w-20 md:h-20 rounded-full bg-slate-800 border-4 
+          w-14 h-14 md:w-16 md:h-16 rounded-full bg-slate-800 border-4 
           ${isTurn ? 'border-yellow-400 scale-110 shadow-[0_0_20px_rgba(250,204,21,0.5)]' : 'border-slate-600 opacity-80'}
           flex items-center justify-center relative z-30 shadow-2xl transition-all
         `}>
-           <Bot size={32} className="text-slate-200" />
+           <Bot size={28} className="text-slate-200" />
            <div className="absolute -bottom-2 bg-black/80 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-white/10 z-50 whitespace-nowrap">
              {player.name}
            </div>
            {/* Card Count Badge */}
-           <div className="absolute -top-2 -right-2 w-6 h-6 bg-red-600 rounded-full flex items-center justify-center text-xs font-bold text-white border-2 border-slate-900 shadow z-40">
+           <div className="absolute -top-2 -right-2 w-5 h-5 bg-red-600 rounded-full flex items-center justify-center text-[10px] font-bold text-white border-2 border-slate-900 shadow z-40">
              {player.hand.length}
            </div>
         </div>
         
-        {/* Opponent Cards Visual - Uniformly Below Avatar */}
-        <div className="absolute top-[100%] left-1/2 -translate-x-1/2 mt-4 z-20 pointer-events-none w-0 h-0 flex items-center justify-center">
+        {/* Opponent Cards Visual - Uniformly Below Avatar with reduced margin */}
+        <div className="absolute top-[100%] left-1/2 -translate-x-1/2 mt-1 z-20 pointer-events-none w-0 h-0 flex items-center justify-center">
            {Array.from({ length: visibleCards }).map((_, i) => {
                const center = (visibleCards - 1) / 2;
                const offset = i - center;
@@ -132,11 +139,11 @@ const GameTable: React.FC<GameTableProps> = ({
                     key={i} 
                     className="absolute origin-bottom transition-all duration-300" 
                     style={{
-                        transform: `translateX(${offset * 14}px) rotate(${offset * 5}deg) translateY(${Math.abs(offset) * 2}px)`,
+                        transform: `translateX(${offset * 10}px) rotate(${offset * 5}deg) translateY(${Math.abs(offset) * 2}px)`,
                         zIndex: i
                     }}
                    >
-                      <CardView size="xs" flipped className="shadow-md border border-white/10 brightness-90" />
+                      <CardView size="xs" flipped className="shadow-md border border-white/10 brightness-90 scale-90" />
                    </div>
                );
            })}
@@ -153,12 +160,64 @@ const GameTable: React.FC<GameTableProps> = ({
   };
 
   if (status === GameStatus.GameOver && winner) {
+      const isHumanWinner = winner.id === 0;
       return (
-          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/90 backdrop-blur-md animate-pop">
-              <Trophy size={120} className="text-yellow-400 mb-8 drop-shadow-[0_0_30px_rgba(250,204,21,0.8)] animate-bounce" />
-              <h1 className="text-6xl font-black text-white mb-4">WINNER</h1>
-              <p className="text-4xl text-yellow-300 font-bold mb-12">{winner.name}</p>
-              <button onClick={onRestart} className="px-10 py-4 bg-white text-black font-black text-xl rounded-full hover:scale-105 transition-transform">PLAY AGAIN</button>
+          <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center overflow-hidden">
+             {/* Backdrop */}
+             <div className="absolute inset-0 bg-slate-900/95 backdrop-blur-xl z-0"></div>
+             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-yellow-500/20 via-transparent to-transparent animate-pulse z-0"></div>
+             
+             {/* Confetti - Randomly generated */}
+             {Array.from({ length: 50 }).map((_, i) => (
+                 <div 
+                   key={i}
+                   className="absolute top-0 w-3 h-3 md:w-4 md:h-4 rounded-sm animate-confetti z-0"
+                   style={{
+                      left: `${Math.random() * 100}%`,
+                      backgroundColor: ['#ef4444', '#3b82f6', '#22c55e', '#eab308', '#a855f7'][Math.floor(Math.random() * 5)],
+                      animationDuration: `${Math.random() * 3 + 2}s`,
+                      animationDelay: `${Math.random() * 2}s`,
+                   }}
+                 />
+             ))}
+
+             {/* Content */}
+             <div className="relative z-10 flex flex-col items-center animate-pop scale-100 p-8 w-full max-w-2xl">
+                
+                {/* Trophy / Avatar */}
+                <div className="relative mb-8">
+                    <div className="absolute inset-0 bg-yellow-500 blur-[60px] opacity-40 animate-pulse rounded-full"></div>
+                    {isHumanWinner ? (
+                        <Trophy size={140} className="text-yellow-400 drop-shadow-[0_0_30px_rgba(250,204,21,0.8)] animate-bounce" />
+                    ) : (
+                        <div className="w-32 h-32 rounded-full bg-slate-800 border-4 border-yellow-400 flex items-center justify-center shadow-[0_0_40px_rgba(250,204,21,0.6)] relative">
+                           <Bot size={64} className="text-slate-200" />
+                           <div className="absolute -top-8 text-6xl drop-shadow-lg animate-bounce delay-75">👑</div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Title */}
+                <h1 className="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-yellow-600 drop-shadow-sm mb-4 tracking-tighter uppercase text-center">
+                    {isHumanWinner ? 'VICTORY!' : 'WINNER!'}
+                </h1>
+                
+                <div className="text-2xl md:text-4xl text-white font-bold mb-12 flex items-center gap-3 bg-white/10 px-10 py-3 rounded-full border border-white/10 backdrop-blur-md shadow-lg">
+                    {winner.name} <span className="text-yellow-400">🏆</span>
+                </div>
+
+                {/* Buttons */}
+                <div className="flex gap-4">
+                    <button 
+                      onClick={onRestart} 
+                      className="group relative px-10 py-4 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full text-black font-black text-xl shadow-[0_10px_20px_rgba(234,179,8,0.3)] hover:scale-105 hover:shadow-[0_0_30px_rgba(234,179,8,0.6)] active:scale-95 transition-all overflow-hidden"
+                    >
+                       <span className="relative z-10 flex items-center gap-2"><RotateCw size={20} /> PLAY AGAIN</span>
+                       <div className="absolute inset-0 bg-white/30 translate-y-full group-hover:translate-y-0 transition-transform duration-300 rounded-full"></div>
+                    </button>
+                </div>
+
+             </div>
           </div>
       );
   }
@@ -187,11 +246,11 @@ const GameTable: React.FC<GameTableProps> = ({
           }
 
           let style: React.CSSProperties = {};
-          // Side bots at 25% top to avoid table overlap
-          if (pos === 'left') style = { left: '5%', top: '25%' };
-          if (pos === 'right') style = { right: '5%', top: '25%' };
-          // Top bot centered
-          if (pos === 'top') style = { top: '5%', left: '50%', transform: 'translateX(-50%)' };
+          // Side bots Moved Higher (15%) to avoid collision
+          if (pos === 'left') style = { left: '5%', top: '15%' };
+          if (pos === 'right') style = { right: '5%', top: '15%' };
+          // Top bot centered and higher (2%)
+          if (pos === 'top') style = { top: '2%', left: '50%', transform: 'translateX(-50%)' };
 
           bots.push(
               <div key={i} className="absolute" style={style}>
@@ -208,24 +267,24 @@ const GameTable: React.FC<GameTableProps> = ({
       {/* Table Texture */}
       <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/felt.png')] pointer-events-none"></div>
 
-      {/* Center Content */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[60%] w-full flex flex-col items-center">
+      {/* Center Content - Added z-40 to sit above bots */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[60%] w-full flex flex-col items-center z-40">
          
+         {/* Action Log */}
+         <div className="absolute -top-24 h-8 pointer-events-none">
+            <span className="px-4 py-1 bg-black/40 backdrop-blur-md rounded-full border border-white/10 text-white/80 text-sm font-medium shadow-lg whitespace-nowrap">
+                {lastAction}
+            </span>
+         </div>
+
          {/* Direction Ring */}
          <div className={`absolute w-[500px] h-[500px] border-[1px] border-white/5 rounded-full ${direction === 1 ? 'animate-spin-slow' : 'animate-spin-slow-reverse'} pointer-events-none flex items-center justify-center`}>
              <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-900 p-2 rounded-full"><RotateCw className="text-white/20" /></div>
              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 bg-slate-900 p-2 rounded-full"><RotateCw className="text-white/20 rotate-180" /></div>
          </div>
 
-         {/* Action Log */}
-         <div className="mb-12 h-8">
-            <span className="px-6 py-2 bg-black/40 backdrop-blur-md rounded-full border border-white/10 text-white/80 font-medium shadow-lg">
-                {lastAction}
-            </span>
-         </div>
-
          {/* Decks */}
-         <div className="flex gap-16 items-center">
+         <div className="flex gap-12 md:gap-16 items-center mt-4">
             {/* Draw Pile */}
             <div 
                className={`relative group transition-transform duration-200 ${mustDraw ? 'scale-110 cursor-pointer' : ''}`}
@@ -239,7 +298,7 @@ const GameTable: React.FC<GameTableProps> = ({
                  className={`relative shadow-2xl ${mustDraw ? 'ring-4 ring-yellow-400 animate-pulse' : ''}`} 
                />
                {mustDraw && (
-                 <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 whitespace-nowrap bg-yellow-400 text-black font-bold px-3 py-1 rounded-full text-sm animate-bounce z-50">
+                 <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 whitespace-nowrap bg-yellow-400 text-black font-bold px-3 py-1 rounded-full text-sm animate-bounce z-50 shadow-lg">
                     TAP TO DRAW
                  </div>
                )}
@@ -250,7 +309,8 @@ const GameTable: React.FC<GameTableProps> = ({
                {/* Glow */}
                <div className={`absolute inset-0 bg-${activeColor === CardColor.Wild ? 'white' : activeColor.toLowerCase()}-500 blur-[50px] opacity-30 rounded-full scale-150 transition-colors duration-500`} />
                
-               <CardView card={discardTop} size="lg" hoverEffect={false} className="relative z-10 shadow-2xl" />
+               {/* The STATIC pile shows the OLD card until animation finishes */}
+               <CardView card={visualDiscard} size="lg" hoverEffect={false} className="relative z-10 shadow-2xl" />
 
                {/* Flying Card */}
                {flyingCard && (
