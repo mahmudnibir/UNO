@@ -104,6 +104,11 @@
     </script>
   </head>
   <body class="h-screen w-screen overflow-hidden select-none text-white bg-[#0A0A0A]">
-    <div id="root" class="h-full w-full relative z-10"></div>
+    <div id="root" class="h-full w-full relative z-10">
+      <div class="absolute inset-0 flex items-center justify-center bg-[#0f172a]">
+        <div class="animate-pulse text-yellow-400 font-black text-2xl tracking-widest">LOADING...</div>
+      </div>
+    </div>
+    <script type="module" src="/index.tsx"></script>
   </body>
 </html>
