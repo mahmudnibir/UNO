@@ -11,7 +11,7 @@ import GameTable from './components/GameTable';
 import PlayerHand from './components/PlayerHand';
 import ColorPicker from './components/ColorPicker';
 import CardView from './components/CardView';
-import { Volume2, VolumeX, Play, Users, Trophy, Zap } from 'lucide-react';
+import { Volume2, VolumeX, Play, Users, Trophy, Zap, User } from 'lucide-react';
 
 const INITIAL_HAND_SIZE = 7;
 
@@ -21,6 +21,7 @@ const App: React.FC = () => {
   const [pendingCardPlay, setPendingCardPlay] = useState<Card | null>(null);
   const [isSoundEnabled, setIsSoundEnabled] = useState(true);
   const [lastAction, setLastAction] = useState<string>("Game Start");
+  const [botCount, setBotCount] = useState<number>(3);
 
   // Sound wrapper
   const playSound = (type: 'play' | 'draw' | 'uno' | 'win' | 'turn' | 'error' | 'shuffle') => {
@@ -34,12 +35,21 @@ const App: React.FC = () => {
     playSound('shuffle');
     const deck = createDeck();
     
-    const players: Player[] = [
-      { id: 0, name: 'You', hand: [], isBot: false, hasUno: false },
-      { id: 1, name: 'Sarah', hand: [], isBot: true, hasUno: false },
-      { id: 2, name: 'Mike', hand: [], isBot: true, hasUno: false },
-      { id: 3, name: 'Jess', hand: [], isBot: true, hasUno: false },
-    ];
+    const humans = [{ id: 0, name: 'You', hand: [], isBot: false, hasUno: false }];
+    const botNames = ['Sarah', 'Mike', 'Jess'];
+    const bots: Player[] = [];
+
+    for (let i = 0; i < botCount; i++) {
+        bots.push({
+            id: i + 1,
+            name: botNames[i],
+            hand: [],
+            isBot: true,
+            hasUno: false
+        });
+    }
+
+    const players: Player[] = [...humans, ...bots];
 
     players.forEach(player => {
       player.hand = deck.splice(0, INITIAL_HAND_SIZE);
@@ -176,7 +186,7 @@ const App: React.FC = () => {
 
         // If stack is cleared, Turn ENDS immediately for the victim
         if (newStack === 0) {
-           const nextIndex = getNextPlayerIndex(prev.currentPlayerIndex, 4, prev.direction);
+           const nextIndex = getNextPlayerIndex(prev.currentPlayerIndex, prev.players.length, prev.direction);
            return {
              ...prev,
              deck: newDeck,
@@ -201,7 +211,7 @@ const App: React.FC = () => {
       // Normal Draw (No Stack)
       setLastAction(`${prev.players[playerId].name} drew a card`);
       
-      const nextIndex = getNextPlayerIndex(prev.currentPlayerIndex, 4, prev.direction);
+      const nextIndex = getNextPlayerIndex(prev.currentPlayerIndex, prev.players.length, prev.direction);
 
       return {
         ...prev,
@@ -297,7 +307,7 @@ const App: React.FC = () => {
       setLastAction(actionText);
 
       // Calculate Next Player
-      let nextIndex = getNextPlayerIndex(prev.currentPlayerIndex, 4, nextDirection);
+      let nextIndex = getNextPlayerIndex(prev.currentPlayerIndex, prev.players.length, nextDirection);
 
       // Apply Effects
       if (stackToAdd > 0) {
@@ -315,7 +325,7 @@ const App: React.FC = () => {
       }
 
       if (skipNext) {
-        nextIndex = getNextPlayerIndex(nextIndex, 4, nextDirection);
+        nextIndex = getNextPlayerIndex(nextIndex, prev.players.length, nextDirection);
       }
 
       return {
@@ -375,54 +385,72 @@ const App: React.FC = () => {
             ))}
 
             {/* Main Content */}
-            <div className="relative z-10 flex flex-col items-center animate-pop">
+            <div className="relative z-10 flex flex-col items-center animate-pop max-w-lg w-full px-4">
                 
                 {/* Logo */}
-                <div className="relative mb-12 group cursor-default">
+                <div className="relative mb-8 group cursor-default">
                     <div className="absolute inset-0 bg-yellow-400 blur-[60px] opacity-20 rounded-full group-hover:opacity-30 transition-opacity"></div>
-                    <h1 className="text-[8rem] md:text-[12rem] font-black text-transparent bg-clip-text bg-gradient-to-b from-red-500 to-red-700 drop-shadow-[0_10px_10px_rgba(0,0,0,0.8)] leading-none transform -rotate-3 hover:scale-105 transition-transform duration-500">
+                    <h1 className="text-[6rem] md:text-[10rem] font-black text-transparent bg-clip-text bg-gradient-to-b from-red-500 to-red-700 drop-shadow-[0_10px_10px_rgba(0,0,0,0.8)] leading-none transform -rotate-3 hover:scale-105 transition-transform duration-500">
                       UNO
                     </h1>
-                    <div className="absolute -bottom-4 md:-bottom-8 left-1/2 -translate-x-1/2 bg-yellow-400 text-black font-black text-2xl md:text-4xl px-4 py-1 transform -rotate-2 skew-x-[-10deg] border-4 border-black shadow-xl tracking-widest">
+                    <div className="absolute -bottom-2 md:-bottom-6 left-1/2 -translate-x-1/2 bg-yellow-400 text-black font-black text-xl md:text-3xl px-4 py-1 transform -rotate-2 skew-x-[-10deg] border-4 border-black shadow-xl tracking-widest">
                       MASTER
+                    </div>
+                </div>
+
+                {/* Opponent Selector */}
+                <div className="w-full mb-8 bg-slate-900/50 backdrop-blur-md rounded-2xl p-4 border border-white/10">
+                    <h3 className="text-white/60 text-sm font-bold uppercase tracking-widest mb-4 text-center">Select Opponents</h3>
+                    <div className="flex justify-center gap-4">
+                        {[1, 2, 3].map(count => (
+                            <button 
+                                key={count}
+                                onClick={() => setBotCount(count)}
+                                className={`
+                                    flex flex-col items-center gap-2 px-4 py-3 rounded-xl transition-all w-24
+                                    ${botCount === count 
+                                        ? 'bg-red-600 text-white shadow-lg scale-105 ring-2 ring-red-400' 
+                                        : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white'
+                                    }
+                                `}
+                            >
+                                <div className="flex -space-x-2">
+                                    {Array.from({length: count}).map((_, i) => (
+                                        <User key={i} size={16} />
+                                    ))}
+                                </div>
+                                <span className="font-bold text-lg">{count}</span>
+                            </button>
+                        ))}
                     </div>
                 </div>
 
                 {/* Play Button */}
                 <button 
                   onClick={startGame} 
-                  className="group relative px-12 py-6 bg-gradient-to-br from-red-600 to-red-800 rounded-3xl shadow-[0_10px_30px_rgba(220,38,38,0.4)] transition-all hover:scale-105 active:scale-95 overflow-hidden"
+                  className="w-full group relative px-12 py-6 bg-gradient-to-br from-red-600 to-red-800 rounded-3xl shadow-[0_10px_30px_rgba(220,38,38,0.4)] transition-all hover:scale-105 active:scale-95 overflow-hidden"
                 >
                     <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20"></div>
                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
                     
-                    <div className="relative flex items-center gap-4">
+                    <div className="relative flex items-center justify-center gap-4">
                       <div className="bg-white/20 p-3 rounded-full backdrop-blur-sm">
                         <Play size={32} fill="currentColor" className="text-white ml-1" />
                       </div>
                       <div className="text-left">
                         <div className="text-white font-black text-3xl tracking-tight leading-none">PLAY NOW</div>
-                        <div className="text-red-200 text-sm font-bold uppercase tracking-widest">Single Player Mode</div>
+                        <div className="text-red-200 text-sm font-bold uppercase tracking-widest">VS {botCount} BOT{botCount > 1 ? 'S' : ''}</div>
                       </div>
                     </div>
                 </button>
 
                 {/* Settings / Footer */}
-                <div className="mt-12 flex gap-6">
+                <div className="mt-8 flex gap-6">
                    <button onClick={() => setIsSoundEnabled(!isSoundEnabled)} className="glass-panel px-6 py-3 rounded-full flex items-center gap-2 text-white hover:bg-white/10 transition-colors">
                       {isSoundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
                       <span className="font-bold text-sm">{isSoundEnabled ? 'SOUND ON' : 'SOUND OFF'}</span>
                    </button>
-                   <div className="glass-panel px-6 py-3 rounded-full flex items-center gap-2 text-white/60">
-                      <Users size={20} />
-                      <span className="font-bold text-sm">3 BOTS READY</span>
-                   </div>
                 </div>
-            </div>
-            
-            {/* Footer Credit */}
-            <div className="absolute bottom-4 text-white/20 text-xs font-mono">
-              UNO MASTER v1.0 • REACT • TAILWIND
             </div>
           </div>
       );

@@ -44,21 +44,9 @@ const PlayerHand: React.FC<PlayerHandProps> = ({
     <div className="fixed bottom-0 left-0 right-0 z-40 h-[180px] md:h-[240px] pointer-events-none flex flex-col justify-end">
       
       {/* HUD Controls */}
-      <div className="w-full flex justify-between items-end mb-4 px-6 md:px-12 pointer-events-auto z-50 absolute top-0">
-         {/* Turn Text */}
-         <div className={`transition-all duration-500 transform ${
-             isCurrentTurn ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'
-         }`}>
-            <div className="bg-slate-900/90 backdrop-blur-md border border-green-500/30 text-white px-6 py-2 rounded-full shadow-[0_0_20px_rgba(34,197,94,0.3)] flex items-center gap-3">
-                <span className="relative flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
-                </span>
-                <span className="text-sm font-bold uppercase tracking-widest text-green-400">Your Turn</span>
-            </div>
-         </div>
-
-         {/* UNO Button */}
+      <div className="w-full flex justify-end items-end mb-4 px-6 md:px-12 pointer-events-auto z-50 absolute top-0">
+         
+         {/* UNO Button (Only visible when low cards) */}
          {hand.length <= 2 && !hasShoutedUno && hand.length > 0 && (
            <button 
              onClick={onShoutUno}

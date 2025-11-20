@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import CardView from './CardView';
 import { Card, CardColor, Player, GameStatus } from '../types';
-import { Bot, User, Trophy, RotateCw, RotateCcw } from 'lucide-react';
+import { Bot, Trophy, RotateCw } from 'lucide-react';
 
 interface GameTableProps {
   deckCount: number;
@@ -54,18 +54,22 @@ const GameTable: React.FC<GameTableProps> = ({
       let startY = h + 100; // Default bottom (Player)
       let rot = 0;
 
-      // Identify who played by checking whose turn index *just* passed or by heuristics
-      // Since react state updates instantly, currentPlayerIndex is already next.
-      // We can try to deduce from lastAction string or pass 'previousPlayerIndex' prop.
-      // Fallback: If lastAction includes "Sarah", set Sarah's pos.
+      // Determine positions based on bot layout (matching renderBots logic)
+      // Side bots are at top: 25%
+      const sideBotY = h * 0.25;
       
-      if (lastAction.includes("Sarah")) { startX = 100; startY = h * 0.35; rot = 90; } // Left
-      else if (lastAction.includes("Mike")) { startX = w / 2; startY = -100; rot = 180; } // Top
-      else if (lastAction.includes("Jess")) { startX = w - 100; startY = h * 0.35; rot = -90; } // Right
-      else if (lastAction.includes("You")) { startX = w / 2; startY = h - 50; rot = 0; }
-
-      // Don't animate for player if we want instant drag feel, but for now let's animate all for impact
-      // actually, if "You" played, the card is already removed from hand, so animating from bottom center looks good.
+      if (lastAction.includes("Sarah")) { 
+         // Sarah usually Left
+         startX = 80; startY = sideBotY; rot = 90; 
+      } else if (lastAction.includes("Mike")) { 
+         // Mike usually Top
+         startX = w / 2; startY = 50; rot = 180; 
+      } else if (lastAction.includes("Jess")) { 
+         // Jess usually Right
+         startX = w - 80; startY = sideBotY; rot = -90; 
+      } else if (lastAction.includes("You")) { 
+         startX = w / 2; startY = h - 100; rot = 0; 
+      }
 
       setFlyingCard({
         id: Math.random().toString(),
@@ -95,8 +99,10 @@ const GameTable: React.FC<GameTableProps> = ({
 
   const BotAvatar: React.FC<{ player: Player, index: number, position: 'top' | 'left' | 'right' }> = ({ player, index, position }) => {
     const isTurn = currentPlayerIndex === index;
+    const visibleCards = Math.min(player.hand.length, 5);
+
     return (
-      <div className="relative flex flex-col items-center transition-all duration-500">
+      <div className="relative flex flex-col items-center transition-all duration-500 group">
         {/* Glow */}
         {isTurn && <div className="absolute inset-0 bg-white/30 blur-xl rounded-full scale-150 animate-pulse" />}
         
@@ -104,32 +110,36 @@ const GameTable: React.FC<GameTableProps> = ({
         <div className={`
           w-16 h-16 md:w-20 md:h-20 rounded-full bg-slate-800 border-4 
           ${isTurn ? 'border-yellow-400 scale-110 shadow-[0_0_20px_rgba(250,204,21,0.5)]' : 'border-slate-600 opacity-80'}
-          flex items-center justify-center relative z-10 shadow-2xl transition-all
+          flex items-center justify-center relative z-30 shadow-2xl transition-all
         `}>
            <Bot size={32} className="text-slate-200" />
-           <div className="absolute -bottom-2 bg-black/80 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-white/10">
+           <div className="absolute -bottom-2 bg-black/80 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-white/10 z-50 whitespace-nowrap">
              {player.name}
            </div>
            {/* Card Count Badge */}
-           <div className="absolute -top-2 -right-2 w-6 h-6 bg-red-600 rounded-full flex items-center justify-center text-xs font-bold text-white border-2 border-slate-900 shadow">
+           <div className="absolute -top-2 -right-2 w-6 h-6 bg-red-600 rounded-full flex items-center justify-center text-xs font-bold text-white border-2 border-slate-900 shadow z-40">
              {player.hand.length}
            </div>
         </div>
         
-        {/* Opponent Cards Visual */}
-        <div className={`absolute z-0 opacity-90 transition-transform duration-300
-            ${position === 'left' ? 'left-12 top-4 rotate-[15deg]' : ''}
-            ${position === 'right' ? 'right-12 top-4 -rotate-[15deg]' : ''}
-            ${position === 'top' ? 'top-12' : ''}
-        `}>
-           {Array.from({ length: Math.min(player.hand.length, 5) }).map((_, i) => (
-               <div key={i} className="absolute transform origin-center" style={{ 
-                 transform: `translate(${i*4}px, ${i*2}px) rotate(${i*5}deg)`,
-                 zIndex: -i 
-               }}>
-                  <CardView size="xs" flipped className="shadow-sm border border-white/10" />
-               </div>
-           ))}
+        {/* Opponent Cards Visual - Uniformly Below Avatar */}
+        <div className="absolute top-[100%] left-1/2 -translate-x-1/2 mt-4 z-20 pointer-events-none w-0 h-0 flex items-center justify-center">
+           {Array.from({ length: visibleCards }).map((_, i) => {
+               const center = (visibleCards - 1) / 2;
+               const offset = i - center;
+               return (
+                   <div 
+                    key={i} 
+                    className="absolute origin-bottom transition-all duration-300" 
+                    style={{
+                        transform: `translateX(${offset * 14}px) rotate(${offset * 5}deg) translateY(${Math.abs(offset) * 2}px)`,
+                        zIndex: i
+                    }}
+                   >
+                      <CardView size="xs" flipped className="shadow-md border border-white/10 brightness-90" />
+                   </div>
+               );
+           })}
         </div>
 
         {/* UNO Bubble */}
@@ -153,6 +163,48 @@ const GameTable: React.FC<GameTableProps> = ({
       );
   }
 
+  // --- Position Logic ---
+  const renderBots = () => {
+      const totalPlayers = players.length;
+      
+      // Player 0 is always local (Bottom, handled outside this function implicitly or just not rendered here)
+      // We need to render players 1...totalPlayers-1
+      
+      const bots = [];
+
+      for (let i = 1; i < totalPlayers; i++) {
+          let pos: 'top' | 'left' | 'right' = 'top';
+
+          if (totalPlayers === 2) {
+              // 1 Bot -> Top
+              pos = 'top';
+          } else if (totalPlayers === 3) {
+              // 2 Bots -> Left (1), Right (2)
+              if (i === 1) pos = 'left';
+              if (i === 2) pos = 'right';
+          } else {
+              // 3 Bots -> Left (1), Top (2), Right (3)
+              if (i === 1) pos = 'left';
+              if (i === 2) pos = 'top';
+              if (i === 3) pos = 'right';
+          }
+
+          let style: React.CSSProperties = {};
+          // Side bots at 25% top to avoid table overlap
+          if (pos === 'left') style = { left: '5%', top: '25%' };
+          if (pos === 'right') style = { right: '5%', top: '25%' };
+          // Top bot centered
+          if (pos === 'top') style = { top: '5%', left: '50%', transform: 'translateX(-50%)' };
+
+          bots.push(
+              <div key={i} className="absolute" style={style}>
+                  <BotAvatar player={players[i]} index={i} position={pos} />
+              </div>
+          );
+      }
+      return bots;
+  };
+
   return (
     <div className={`relative w-full h-full bg-gradient-to-br ${getAmbientGlow()} transition-colors duration-1000 overflow-hidden`}>
       
@@ -163,7 +215,7 @@ const GameTable: React.FC<GameTableProps> = ({
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[60%] w-full flex flex-col items-center">
          
          {/* Direction Ring */}
-         <div className={`absolute w-[600px] h-[600px] border-[1px] border-white/5 rounded-full ${direction === 1 ? 'animate-spin-slow' : 'animate-spin-slow-reverse'} pointer-events-none flex items-center justify-center`}>
+         <div className={`absolute w-[500px] h-[500px] border-[1px] border-white/5 rounded-full ${direction === 1 ? 'animate-spin-slow' : 'animate-spin-slow-reverse'} pointer-events-none flex items-center justify-center`}>
              <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-900 p-2 rounded-full"><RotateCw className="text-white/20" /></div>
              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 bg-slate-900 p-2 rounded-full"><RotateCw className="text-white/20 rotate-180" /></div>
          </div>
@@ -190,7 +242,7 @@ const GameTable: React.FC<GameTableProps> = ({
                  className={`relative shadow-2xl ${mustDraw ? 'ring-4 ring-yellow-400 animate-pulse' : ''}`} 
                />
                {mustDraw && (
-                 <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 whitespace-nowrap bg-yellow-400 text-black font-bold px-3 py-1 rounded-full text-sm animate-bounce">
+                 <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 whitespace-nowrap bg-yellow-400 text-black font-bold px-3 py-1 rounded-full text-sm animate-bounce z-50">
                     TAP TO DRAW
                  </div>
                )}
@@ -220,17 +272,11 @@ const GameTable: React.FC<GameTableProps> = ({
          </div>
       </div>
 
-      {/* Bots Positioning */}
-      {/* Left */}
-      <div className="absolute left-[5%] top-[35%]"><BotAvatar player={players[1]} index={1} position="left" /></div>
-      {/* Top */}
-      <div className="absolute top-[10%] left-1/2 -translate-x-1/2"><BotAvatar player={players[2]} index={2} position="top" /></div>
-      {/* Right */}
-      <div className="absolute right-[5%] top-[35%]"><BotAvatar player={players[3]} index={3} position="right" /></div>
+      {/* Render Bots based on dynamic logic */}
+      {renderBots()}
 
     </div>
   );
 };
 
 export default GameTable;
-    
