@@ -1,0 +1,5 @@
+{
+  "name": "UNO Master",
+  "description": "A fully functional, responsive UNO card game featuring single-player mode against intelligent AI bots, complete with animations and game rules.",
+  "requestFramePermissions": []
+}
