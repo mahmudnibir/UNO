@@ -12,7 +12,7 @@ import GameTable from './components/GameTable';
 import PlayerHand from './components/PlayerHand';
 import ColorPicker from './components/ColorPicker';
 import CardView from './components/CardView';
-import { Volume2, VolumeX, Play, Users, Trophy, Zap, User, Copy, Wifi, WifiOff, ArrowRight, Check, Loader2, X, Trash2, Edit3, Shuffle, Download, HelpCircle, Share } from 'lucide-react';
+import { Volume2, VolumeX, Play, Users, Trophy, Zap, User, Copy, Wifi, WifiOff, ArrowRight, Check, Loader2, X, Trash2, Edit3, Shuffle, Download, HelpCircle, Share, Smartphone, Monitor } from 'lucide-react';
 
 const INITIAL_HAND_SIZE = 7;
 
@@ -39,7 +39,8 @@ const App: React.FC = () => {
   // PWA State
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
-  const [showIOSHelp, setShowIOSHelp] = useState(false);
+  const [showInstallHelp, setShowInstallHelp] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
   
   // Settings
   const [botCount, setBotCount] = useState<number>(3);
@@ -52,6 +53,10 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
+      // Detect iOS
+      const checkIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+      setIsIOS(checkIOS);
+
       // PWA Install Prompt Listener
       const handler = (e: any) => {
           e.preventDefault();
@@ -73,23 +78,21 @@ const App: React.FC = () => {
   }, []);
 
   const handleInstallClick = async () => {
-      // iOS Detection
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
-      
       if (isIOS) {
-          setShowIOSHelp(true);
+          setShowInstallHelp(true);
           return;
       }
 
       if (!deferredPrompt) {
-          // Fallback if prompt isn't ready (common in some desktop browsers)
-          alert("To install, check your browser's address bar for the Install icon.");
+          // Fallback if prompt isn't ready (common in some desktop browsers or if already installed)
+          setShowInstallHelp(true);
           return;
       }
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
       if (outcome === 'accepted') {
           setDeferredPrompt(null);
+          setShowInstallHelp(false);
       }
   };
 
@@ -552,6 +555,54 @@ const App: React.FC = () => {
                </div>
             ))}
 
+            {/* PWA Install Help Modal - Fixed Bottom Right */}
+            {showInstallHelp && (
+                <div className="fixed bottom-4 right-4 max-w-xs md:max-w-sm bg-slate-900/95 backdrop-blur-xl p-6 rounded-2xl border border-yellow-400/30 shadow-[0_0_30px_rgba(0,0,0,0.5)] z-[100] animate-pop">
+                    <button 
+                        onClick={() => setShowInstallHelp(false)} 
+                        className="absolute top-2 right-2 text-white/40 hover:text-white bg-white/5 hover:bg-white/20 rounded-full p-1 transition-colors"
+                    >
+                        <X size={16}/>
+                    </button>
+                    
+                    <h3 className="font-black text-yellow-400 mb-3 flex items-center gap-2 uppercase tracking-wide">
+                        <Download size={20}/> Install App
+                    </h3>
+                    
+                    {isIOS ? (
+                        <div className="text-sm text-slate-300 space-y-3">
+                            <p>To install on iOS, follow these steps:</p>
+                            <div className="flex items-center gap-3 bg-white/5 p-3 rounded-lg">
+                                <Share className="text-blue-400 shrink-0" size={24} />
+                                <span>1. Tap the <strong>Share</strong> button in your browser menu.</span>
+                            </div>
+                            <div className="flex items-center gap-3 bg-white/5 p-3 rounded-lg">
+                                <div className="w-6 h-6 bg-gray-200 rounded flex items-center justify-center shrink-0"><span className="text-black font-bold">+</span></div>
+                                <span>2. Scroll down and tap <strong>"Add to Home Screen"</strong>.</span>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="text-sm text-slate-300 space-y-3">
+                           <p>App installation is managed by your browser.</p>
+                           <div className="bg-white/5 p-3 rounded-lg flex gap-3 items-start">
+                                <Monitor className="text-indigo-400 shrink-0 mt-0.5" size={20} />
+                                <div>
+                                    <strong className="text-white block mb-1">Desktop:</strong>
+                                    Look for an <span className="inline-block border border-white/30 rounded px-1 mx-1 text-[10px]">Install</span> icon in the address bar (top right).
+                                </div>
+                           </div>
+                            <div className="bg-white/5 p-3 rounded-lg flex gap-3 items-start">
+                                <Smartphone className="text-green-400 shrink-0 mt-0.5" size={20} />
+                                <div>
+                                    <strong className="text-white block mb-1">Android:</strong>
+                                    Tap the menu (⋮) and select <strong>"Install App"</strong> or <strong>"Add to Home Screen"</strong>.
+                                </div>
+                           </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
             <div className="relative z-10 flex flex-col items-center animate-pop max-w-lg w-full px-4">
                 
                 {/* Logo Section */}
@@ -616,19 +667,8 @@ const App: React.FC = () => {
                                 onClick={handleInstallClick} 
                                 className="w-full py-3 bg-white/10 hover:bg-white/20 rounded-xl font-bold text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2 text-white/60 hover:text-white"
                             >
-                                <Download size={18} /> {deferredPrompt ? "Install App" : "Install PWA"}
+                                <Download size={18} /> {deferredPrompt ? "Install App" : "Install / Help"}
                             </button>
-                            {showIOSHelp && (
-                                <div className="bg-black/60 p-4 rounded-xl text-sm text-white/80 flex items-start gap-3 animate-pop">
-                                    <Share size={20} className="shrink-0 mt-1 text-blue-400" />
-                                    <div>
-                                        <p className="font-bold text-white mb-1">To Install on iOS:</p>
-                                        1. Tap the <span className="font-bold text-blue-400">Share</span> button below.<br/>
-                                        2. Scroll down and tap <span className="font-bold text-white">Add to Home Screen</span>.
-                                        <button onClick={() => setShowIOSHelp(false)} className="block mt-2 text-xs text-white/40 underline">Close</button>
-                                    </div>
-                                </div>
-                            )}
                         </div>
                     </div>
                 ) : (
