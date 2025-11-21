@@ -12,7 +12,11 @@ import GameTable from './components/GameTable';
 import PlayerHand from './components/PlayerHand';
 import ColorPicker from './components/ColorPicker';
 import CardView from './components/CardView';
-import { Volume2, VolumeX, Play, Users, Trophy, Zap, User, Copy, Wifi, WifiOff, ArrowRight, Check, Loader2, X, Trash2, Edit3, Shuffle, Download, HelpCircle, Share, Smartphone, Monitor, Menu } from 'lucide-react';
+import { 
+  Volume2, VolumeX, Play, Users, Trophy, Zap, User, Copy, Wifi, WifiOff, 
+  ArrowRight, Check, Loader2, X, Trash2, Edit3, Shuffle, Download, 
+  HelpCircle, Share, Smartphone, Monitor, Menu, AlertTriangle, BookOpen 
+} from 'lucide-react';
 
 const INITIAL_HAND_SIZE = 7;
 
@@ -24,6 +28,16 @@ const App: React.FC = () => {
   const [lastAction, setLastAction] = useState<string>("Game Start");
   const [lastActivePlayerId, setLastActivePlayerId] = useState<number | null>(null);
   
+  // UI States
+  const [showRules, setShowRules] = useState(false);
+  const [confirmModal, setConfirmModal] = useState<{
+      isOpen: boolean;
+      title: string;
+      message: string;
+      onConfirm: () => void;
+      type: 'danger' | 'neutral';
+  }>({ isOpen: false, title: '', message: '', onConfirm: () => {}, type: 'neutral' });
+
   // Ref to track latest state inside closures/callbacks
   const gameStateRef = useRef<GameState | null>(null);
 
@@ -549,6 +563,39 @@ const App: React.FC = () => {
     ? (gameState.currentPlayerIndex === myPlayerId && (!hasValidMove || gameState.drawStack > 0))
     : false;
 
+  // --- Modal Handlers ---
+  const triggerExitConfirm = () => {
+      setConfirmModal({
+          isOpen: true,
+          title: 'Exit Game?',
+          message: 'Are you sure you want to exit? All progress will be lost.',
+          type: 'danger',
+          onConfirm: () => {
+              setGameState(null);
+              setLobbyState('main');
+              if (networkMode === NetworkMode.Host || networkMode === NetworkMode.Client) {
+                    mpManager.disconnect();
+                    setNetworkMode(NetworkMode.Offline);
+              }
+              setConfirmModal(prev => ({ ...prev, isOpen: false }));
+          }
+      });
+  };
+
+  const triggerRestartConfirm = () => {
+      setConfirmModal({
+          isOpen: true,
+          title: 'Restart Game?',
+          message: 'Are you sure you want to start a new game? Current progress will be lost.',
+          type: 'neutral',
+          onConfirm: () => {
+              startGame();
+              setConfirmModal(prev => ({ ...prev, isOpen: false }));
+          }
+      });
+  };
+
+  // --- Render Lobby ---
   if (!gameState) {
       const lobbyCards: any[] = [
         { id: 'l1', color: CardColor.Red, value: CardValue.DrawTwo, rot: -15, x: '10%', y: '20%', delay: '0s' },
@@ -886,16 +933,7 @@ const App: React.FC = () => {
       <div className="absolute top-0 left-0 right-0 z-50 p-4 flex justify-between items-start pointer-events-none">
         <div className="pointer-events-auto flex gap-2">
             <button 
-                onClick={() => {
-                    if (window.confirm("Are you sure you want to exit?")) {
-                        setGameState(null);
-                        setLobbyState('main');
-                        if (networkMode === NetworkMode.Host || networkMode === NetworkMode.Client) {
-                             mpManager.disconnect();
-                             setNetworkMode(NetworkMode.Offline);
-                        }
-                    }
-                }}
+                onClick={triggerExitConfirm}
                 className="bg-slate-800/80 text-white px-6 py-2 rounded-full font-bold hover:bg-red-600 hover:shadow-[0_0_15px_rgba(220,38,38,0.5)] transition-all border border-white/10 backdrop-blur-md"
             >
                 EXIT
@@ -903,14 +941,19 @@ const App: React.FC = () => {
         </div>
         
         <div className="flex items-center gap-3 pointer-events-auto">
+             {/* Help / Rules Button */}
+             <button 
+                onClick={() => setShowRules(true)}
+                className="w-10 h-10 bg-slate-800/80 rounded-full flex items-center justify-center hover:bg-white/20 transition-all border border-white/10 shadow-lg"
+                title="How to Play"
+             >
+                <HelpCircle size={20} className="text-white" />
+             </button>
+
              {/* Shuffle/New Game Button - Only for Host or Offline */}
              {(networkMode === NetworkMode.Offline || networkMode === NetworkMode.Host) && (
                  <button 
-                    onClick={() => {
-                         if (window.confirm("Restart game?")) {
-                             startGame();
-                         }
-                    }}
+                    onClick={triggerRestartConfirm}
                     className="w-10 h-10 bg-slate-800/80 rounded-full flex items-center justify-center hover:bg-blue-600 hover:rotate-180 transition-all duration-500 border border-white/10 shadow-lg group"
                     title="Shuffle / New Game"
                  >
@@ -967,6 +1010,126 @@ const App: React.FC = () => {
                        UNO!
                    </div>
               </div>
+          </div>
+      )}
+
+      {/* --- Confirmation Modal --- */}
+      {confirmModal.isOpen && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-pop">
+            <div className={`glass-panel p-8 rounded-3xl max-w-sm w-full mx-4 text-center border border-white/10 shadow-2xl relative ${confirmModal.type === 'danger' ? 'shadow-red-900/20' : 'shadow-blue-900/20'}`}>
+                <div className={`w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center ${confirmModal.type === 'danger' ? 'bg-red-500/20 text-red-500' : 'bg-yellow-500/20 text-yellow-500'}`}>
+                    <AlertTriangle size={32} strokeWidth={2.5} />
+                </div>
+                
+                <h3 className="text-2xl font-bold text-white mb-2">{confirmModal.title}</h3>
+                <p className="text-slate-300 mb-8 leading-relaxed">{confirmModal.message}</p>
+                
+                <div className="flex gap-4">
+                    <button 
+                        onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                        className="flex-1 py-3 rounded-xl font-bold text-sm uppercase tracking-wider bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-all"
+                    >
+                        Cancel
+                    </button>
+                    <button 
+                        onClick={confirmModal.onConfirm}
+                        className={`flex-1 py-3 rounded-xl font-bold text-sm uppercase tracking-wider shadow-lg hover:scale-105 transition-all ${confirmModal.type === 'danger' ? 'bg-red-600 hover:bg-red-500 text-white' : 'bg-blue-600 hover:bg-blue-500 text-white'}`}
+                    >
+                        Confirm
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {/* --- Rules / Help Modal --- */}
+      {showRules && (
+          <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-pop">
+             <div className="bg-slate-900/95 border border-white/10 rounded-3xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl relative overflow-hidden">
+                 
+                 {/* Header */}
+                 <div className="sticky top-0 bg-slate-900/95 p-5 border-b border-white/10 flex justify-between items-center z-10 backdrop-blur-xl">
+                    <h2 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500 tracking-widest flex items-center gap-3 uppercase">
+                      <BookOpen className="text-yellow-400" /> Rules & Guide
+                    </h2>
+                    <button 
+                        onClick={() => setShowRules(false)}
+                        className="w-8 h-8 bg-white/5 hover:bg-white/10 rounded-full flex items-center justify-center text-white/50 hover:text-white transition-all"
+                    >
+                        <X size={20} />
+                    </button>
+                 </div>
+
+                 {/* Content Scrollable */}
+                 <div className="overflow-y-auto p-6 space-y-8 custom-scrollbar">
+                     
+                     {/* Section 1: Goal */}
+                     <section>
+                         <h3 className="text-xl font-bold text-white mb-3 flex items-center gap-2">
+                            <Trophy size={20} className="text-yellow-400" /> The Goal
+                         </h3>
+                         <p className="text-slate-400 leading-relaxed">
+                             Be the first player to get rid of all your cards in each round. 
+                             When you have one card left, you <strong className="text-red-400">MUST</strong> shout "UNO"!
+                         </p>
+                     </section>
+
+                     {/* Section 2: Gameplay */}
+                     <section>
+                         <h3 className="text-xl font-bold text-white mb-3 flex items-center gap-2">
+                            <Play size={20} className="text-green-400" /> Gameplay
+                         </h3>
+                         <ul className="space-y-3 text-slate-400">
+                             <li className="flex gap-3">
+                                 <div className="w-1.5 h-1.5 rounded-full bg-white/20 mt-2.5 shrink-0" />
+                                 <span>Match the top card on the Discard Pile by <strong>Color</strong>, <strong>Number</strong>, or <strong>Symbol</strong>.</span>
+                             </li>
+                             <li className="flex gap-3">
+                                 <div className="w-1.5 h-1.5 rounded-full bg-white/20 mt-2.5 shrink-0" />
+                                 <span>If you have no matches, you must <strong className="text-blue-400">Draw a Card</strong> from the deck.</span>
+                             </li>
+                             <li className="flex gap-3">
+                                 <div className="w-1.5 h-1.5 rounded-full bg-white/20 mt-2.5 shrink-0" />
+                                 <span>Play moves clockwise until a Reverse card is played.</span>
+                             </li>
+                         </ul>
+                     </section>
+
+                     {/* Section 3: Action Cards */}
+                     <section>
+                         <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                            <Zap size={20} className="text-red-400" /> Action Cards
+                         </h3>
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                             <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                                 <strong className="text-white block mb-1">🚫 Skip</strong>
+                                 <span className="text-slate-400 text-sm">Next player loses their turn.</span>
+                             </div>
+                             <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                                 <strong className="text-white block mb-1">🔄 Reverse</strong>
+                                 <span className="text-slate-400 text-sm">Reverses direction of play.</span>
+                             </div>
+                             <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                                 <strong className="text-white block mb-1">✨ Wild</strong>
+                                 <span className="text-slate-400 text-sm">Change the color to anything you want.</span>
+                             </div>
+                             <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                                 <strong className="text-white block mb-1">🃏 Draw Two (+2)</strong>
+                                 <span className="text-slate-400 text-sm">Next player draws 2 cards and loses turn.</span>
+                             </div>
+                             <div className="bg-white/5 p-4 rounded-xl border border-white/5 md:col-span-2">
+                                 <strong className="text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-purple-400 font-black block mb-1">🌈 Wild Draw Four (+4)</strong>
+                                 <span className="text-slate-400 text-sm">Change color, next player draws 4 cards and loses turn.</span>
+                             </div>
+                         </div>
+                     </section>
+                     
+                     {/* Footer */}
+                     <div className="pt-4 border-t border-white/10 text-center">
+                         <p className="text-slate-500 text-sm italic">Tip: Save your Wild cards for when you really need them!</p>
+                     </div>
+                 </div>
+             </div>
           </div>
       )}
     </div>
