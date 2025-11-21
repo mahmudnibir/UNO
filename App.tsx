@@ -12,7 +12,7 @@ import GameTable from './components/GameTable';
 import PlayerHand from './components/PlayerHand';
 import ColorPicker from './components/ColorPicker';
 import CardView from './components/CardView';
-import { Volume2, VolumeX, Play, Users, Trophy, Zap, User, Copy, Wifi, WifiOff, ArrowRight, Check, Loader2, X, Trash2, Edit3 } from 'lucide-react';
+import { Volume2, VolumeX, Play, Users, Trophy, Zap, User, Copy, Wifi, WifiOff, ArrowRight, Check, Loader2, X, Trash2, Edit3, Shuffle } from 'lucide-react';
 
 const INITIAL_HAND_SIZE = 7;
 
@@ -757,7 +757,12 @@ const App: React.FC = () => {
       <div className="absolute top-4 left-4 right-4 z-50 flex justify-between items-start">
          <button onClick={() => { mpManager.disconnect(); setGameState(null); setLobbyState('main'); setNetworkMode(NetworkMode.Offline); }} className="glass-panel px-4 py-2 rounded-full text-sm font-bold hover:bg-red-500/50 transition-colors">EXIT</button>
          
-         <div className="flex gap-4">
+         <div className="flex gap-2 md:gap-4">
+             {networkMode !== NetworkMode.Client && (
+                 <button onClick={startGame} className="glass-panel p-2 rounded-full hover:bg-white/20 hover:rotate-180 transition-all duration-500" title="Shuffle New Game">
+                    <Shuffle size={20} />
+                 </button>
+             )}
              <button onClick={() => setIsSoundEnabled(!isSoundEnabled)} className="glass-panel p-2 rounded-full hover:bg-white/20">
                 {isSoundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
              </button>
