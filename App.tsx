@@ -345,6 +345,11 @@ const App: React.FC = () => {
     }
   };
 
+  const handleColorCancel = () => {
+      setPendingCardPlay(null);
+      setShowColorPicker(false);
+  };
+
   const handleClientDraw = () => {
       if (networkMode === NetworkMode.Client) {
           if (gameState?.currentPlayerIndex === myPlayerId) {
@@ -867,7 +872,7 @@ const App: React.FC = () => {
       />
 
       {showColorPicker && (
-        <ColorPicker onSelect={handleColorSelect} />
+        <ColorPicker onSelect={handleColorSelect} onCancel={handleColorCancel} />
       )}
       
       {gameState.isUnoShouted && (

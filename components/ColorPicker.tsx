@@ -1,11 +1,14 @@
+
 import React from 'react';
 import { CardColor } from '../types';
+import { X } from 'lucide-react';
 
 interface ColorPickerProps {
   onSelect: (color: CardColor) => void;
+  onCancel: () => void;
 }
 
-const ColorPicker: React.FC<ColorPickerProps> = ({ onSelect }) => {
+const ColorPicker: React.FC<ColorPickerProps> = ({ onSelect, onCancel }) => {
   const colors = [
     { id: CardColor.Red, bg: 'bg-gradient-to-br from-red-500 to-red-700', label: 'Red' },
     { id: CardColor.Blue, bg: 'bg-gradient-to-br from-blue-500 to-blue-700', label: 'Blue' },
@@ -15,11 +18,20 @@ const ColorPicker: React.FC<ColorPickerProps> = ({ onSelect }) => {
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-pop">
-      <div className="glass-panel p-8 rounded-3xl max-w-md w-full mx-4 text-center border border-white/10 shadow-2xl">
+      <div className="glass-panel p-8 rounded-3xl max-w-md w-full mx-4 text-center border border-white/10 shadow-2xl relative">
+        
+        {/* Close Button */}
+        <button 
+            onClick={onCancel}
+            className="absolute top-4 right-4 text-white/40 hover:text-white hover:bg-white/10 p-2 rounded-full transition-colors"
+        >
+            <X size={24} />
+        </button>
+
         <h2 className="text-3xl font-bold mb-2 text-white">Wild Card Played!</h2>
         <p className="text-slate-300 mb-8">Choose the next color to continue.</p>
         
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-2 gap-6 mb-6">
           {colors.map((c) => (
             <button
               key={c.id}
@@ -34,6 +46,13 @@ const ColorPicker: React.FC<ColorPickerProps> = ({ onSelect }) => {
             </button>
           ))}
         </div>
+
+        <button 
+            onClick={onCancel}
+            className="text-white/50 hover:text-white text-sm font-bold uppercase tracking-widest hover:underline transition-all"
+        >
+            Cancel Selection
+        </button>
       </div>
     </div>
   );
