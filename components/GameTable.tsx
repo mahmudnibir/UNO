@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import CardView from './CardView';
 import { Card, CardColor, Player, GameStatus } from '../types';
 import { Bot, Trophy, RotateCw, User, Copy, Check } from 'lucide-react';
@@ -31,6 +31,13 @@ interface FlyingCardState {
   rotation: number;
 }
 
+interface DrawingCardState {
+    id: string;
+    toX: number;
+    toY: number;
+    rotation: number;
+}
+
 const GameTable: React.FC<GameTableProps> = ({
   deckCount,
   discardTop,
@@ -50,8 +57,12 @@ const GameTable: React.FC<GameTableProps> = ({
 }) => {
   
   const [flyingCard, setFlyingCard] = useState<FlyingCardState | null>(null);
+  const [drawingCard, setDrawingCard] = useState<DrawingCardState | null>(null);
   const [visualDiscard, setVisualDiscard] = useState<Card>(discardTop);
   const [copiedId, setCopiedId] = useState(false);
+  
+  // Track previous hand sizes to detect draws
+  const prevHandSizes = useRef<number[]>([]);
 
   // Helper to determine visual position of any player index
   const getPlayerPosition = (index: number): 'bottom' | 'top' | 'left' | 'right' => {
@@ -59,30 +70,9 @@ const GameTable: React.FC<GameTableProps> = ({
 
     const totalPlayers = players.length;
     
-    // Calculate relative index from my perspective
-    // If I am 0: 1, 2, 3
-    // If I am 1: 2, 3, 0
-    // But specifically for the bots rendering logic we used in renderBots:
-    // In standard offline (I am 0):
-    // 2 players: 1 is Top
-    // 3 players: 1 Left, 2 Right
-    // 4 players: 1 Left, 2 Top, 3 Right
-    
-    // We need to match the layout logic exactly.
-    // Assuming myPlayerId is always the "Bottom" player visually.
-    
-    // Create a rotated array where myId is at index 0
-    // For animation, we just need to know where the avatar IS on screen.
-    // The renderBots function below hardcodes positions based on absolute index in the array relative to "me" being implicit 0 in offline, 
-    // or explicit logic.
-    
-    // Let's standardize based on the renderBots logic:
-    if (totalPlayers === 2) return 'top'; // The other player is always top
+    if (totalPlayers === 2) return 'top'; 
     
     if (totalPlayers === 3) {
-        // If I am 0: 1 is Left, 2 is Right
-        // If I am 1: logic in renderBots handles absolute indices.
-        // Let's look at renderBots logic again. It iterates 1..total.
         if (index === (myPlayerId + 1) % totalPlayers) return 'left';
         return 'right';
     }
@@ -97,9 +87,85 @@ const GameTable: React.FC<GameTableProps> = ({
     return 'top';
   };
 
+  // --- Drawing Animation Logic ---
+  useEffect(() => {
+      if (status !== GameStatus.Playing) {
+          prevHandSizes.current = players.map(p => p.hand.length);
+          return;
+      }
+
+      players.forEach((p, i) => {
+          const prev = prevHandSizes.current[i];
+          // If hand size increased AND it wasn't a massive jump (initial deal)
+          if (prev !== undefined && p.hand.length > prev && (p.hand.length - prev) < 5) {
+              // Trigger draw animation for this player
+              // We only trigger if this player matches the last active player (to avoid race conditions or multi-trigger)
+              // Or simply rely on the loop.
+              // To prevent spam, only animate if lastActivePlayerId matches? 
+              // Actually, relying on hand size diff is safer for penalties.
+              
+              // Calculate Target Coordinates relative to Deck (Center)
+              const w = window.innerWidth;
+              const h = window.innerHeight;
+              
+              // Approximate Deck Center: W/2 - 60, H * 0.4
+              const startX = w / 2 - 60;
+              const startY = h * 0.4;
+
+              let destX = 0;
+              let destY = 0;
+              let rot = 0;
+
+              const pos = getPlayerPosition(i);
+              switch (pos) {
+                  case 'bottom':
+                      destX = w / 2;
+                      destY = h - 50;
+                      rot = 0;
+                      break;
+                  case 'top':
+                      destX = w / 2;
+                      destY = h * 0.02 + 40;
+                      rot = 180;
+                      break;
+                  case 'left':
+                      destX = w * 0.05 + 40;
+                      destY = h * 0.15 + 40;
+                      rot = -90;
+                      break;
+                  case 'right':
+                      destX = w * 0.95 - 40;
+                      destY = h * 0.15 + 40;
+                      rot = 90;
+                      break;
+              }
+
+              // Calculate Delta for CSS transform
+              const tx = destX - startX;
+              const ty = destY - startY;
+
+              setDrawingCard({
+                  id: Math.random().toString(),
+                  toX: tx,
+                  toY: ty,
+                  rotation: rot
+              });
+              
+              soundManager.play('whoosh');
+
+              setTimeout(() => {
+                  setDrawingCard(null);
+              }, 600);
+          }
+      });
+
+      prevHandSizes.current = players.map(p => p.hand.length);
+  }, [players, status, myPlayerId]);
+
+
+  // --- Playing/Discard Animation Logic ---
   useEffect(() => {
     if (discardTop.id !== visualDiscard.id) {
-      soundManager.play('whoosh');
       const w = window.innerWidth;
       const h = window.innerHeight;
       
@@ -107,10 +173,8 @@ const GameTable: React.FC<GameTableProps> = ({
       let startY = h + 100; 
       let rot = 0;
 
-      // Use the explicit ID to find position
       const originPos = lastActivePlayerId !== null ? getPlayerPosition(lastActivePlayerId) : 'bottom';
       
-      // Coordinates matching the Avatar CSS positions
       switch (originPos) {
           case 'bottom':
               startX = w / 2; 
@@ -119,17 +183,17 @@ const GameTable: React.FC<GameTableProps> = ({
               break;
           case 'top':
               startX = w / 2; 
-              startY = h * 0.02 + 40; // Matches top: 2%
+              startY = h * 0.02 + 40; 
               rot = 180;
               break;
           case 'left':
-              startX = w * 0.05 + 40; // Matches left: 5%
-              startY = h * 0.15 + 40; // Matches top: 15%
+              startX = w * 0.05 + 40; 
+              startY = h * 0.15 + 40; 
               rot = 90;
               break;
           case 'right':
-              startX = w * 0.95 - 40; // Matches right: 5%
-              startY = h * 0.15 + 40; // Matches top: 15%
+              startX = w * 0.95 - 40; 
+              startY = h * 0.15 + 40; 
               rot = -90;
               break;
       }
@@ -141,6 +205,8 @@ const GameTable: React.FC<GameTableProps> = ({
         fromY: startY,
         rotation: rot
       });
+      
+      soundManager.play('whoosh');
       
       setTimeout(() => {
         setFlyingCard(null);
@@ -191,6 +257,7 @@ const GameTable: React.FC<GameTableProps> = ({
            </div>
         </div>
         
+        {/* Cards always below avatar for clean uniform look */}
         <div className="absolute top-[100%] left-1/2 -translate-x-1/2 mt-1 z-20 pointer-events-none w-0 h-0 flex items-center justify-center">
            {Array.from({ length: visibleCards }).map((_, i) => {
                const center = (visibleCards - 1) / 2;
@@ -233,13 +300,10 @@ const GameTable: React.FC<GameTableProps> = ({
   const renderBots = () => {
       const totalPlayers = players.length;
       const bots = [];
-
-      // We need to iterate all players and render everyone EXCEPT myPlayerId
       for (let i = 0; i < totalPlayers; i++) {
           if (i === myPlayerId) continue;
-
           const pos = getPlayerPosition(i);
-          if (pos === 'bottom') continue; // Should not happen based on check above, but safe guard
+          if (pos === 'bottom') continue;
 
           let style: React.CSSProperties = {};
           if (pos === 'left') style = { left: '5%', top: '15%' };
@@ -255,7 +319,6 @@ const GameTable: React.FC<GameTableProps> = ({
     <div className={`relative w-full h-full bg-gradient-to-br ${getAmbientGlow()} transition-colors duration-1000 overflow-hidden`}>
       <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/felt.png')] pointer-events-none"></div>
       
-      {/* Room ID Overlay */}
       {roomId && (
          <div className="absolute top-4 left-20 z-50">
              <div 
@@ -277,7 +340,7 @@ const GameTable: React.FC<GameTableProps> = ({
              <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-900 p-2 rounded-full"><RotateCw className="text-white/20" /></div>
              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 bg-slate-900 p-2 rounded-full"><RotateCw className="text-white/20 rotate-180" /></div>
          </div>
-         <div className="flex gap-12 md:gap-16 items-center mt-4">
+         <div className="flex gap-12 md:gap-16 items-center mt-4 relative">
             <div 
                 className={`relative group transition-transform duration-200 ${mustDraw ? 'scale-110 cursor-pointer' : ''}`} 
                 onClick={currentPlayerIndex === myPlayerId ? onDrawCard : undefined}
@@ -285,6 +348,17 @@ const GameTable: React.FC<GameTableProps> = ({
                <div className="absolute -top-2 -left-1 w-full h-full bg-slate-800 rounded-xl border border-slate-600" />
                <div className="absolute -top-1 -left-0.5 w-full h-full bg-slate-800 rounded-xl border border-slate-600" />
                <CardView size="lg" flipped className={`relative shadow-2xl ${mustDraw ? 'ring-4 ring-yellow-400 animate-pulse' : ''}`} />
+               
+               {/* Drawing Animation Card (Overlay on Deck) */}
+               {drawingCard && (
+                   <div 
+                    className="absolute top-0 left-0 z-50 animate-fly-target pointer-events-none"
+                    style={{ '--tx': `${drawingCard.toX}px`, '--ty': `${drawingCard.toY}px`, '--rot': `${drawingCard.rotation}deg` } as React.CSSProperties}
+                   >
+                       <CardView size="lg" flipped className="shadow-2xl" />
+                   </div>
+               )}
+
                {mustDraw && <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 whitespace-nowrap bg-yellow-400 text-black font-bold px-3 py-1 rounded-full text-sm animate-bounce z-50 shadow-lg">TAP TO DRAW</div>}
             </div>
             <div className="relative">

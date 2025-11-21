@@ -42,6 +42,22 @@
         backface-visibility: hidden;
       }
 
+      /* Animation for Drawing Cards: Deck -> Player */
+      @keyframes flyToTarget {
+        0% {
+          transform: translate3d(0, 0, 0) scale(1) rotate(0deg);
+          opacity: 1;
+        }
+        100% {
+          transform: translate3d(var(--tx), var(--ty), 0) scale(0.4) rotate(var(--rot));
+          opacity: 0.5;
+        }
+      }
+      .animate-fly-target {
+        animation: flyToTarget 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+        will-change: transform;
+      }
+
       @keyframes spinSlow {
         from { transform: rotate(0deg); }
         to { transform: rotate(360deg); }
