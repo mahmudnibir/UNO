@@ -30,6 +30,12 @@ class MultiplayerManager {
   }
 
   async hostGame(): Promise<string> {
+    // Ensure clean state
+    if (this.peer) {
+      this.peer.destroy();
+      this.peer = null;
+    }
+
     return new Promise((resolve, reject) => {
       const attemptHost = (retriesLeft: number) => {
         if (retriesLeft === 0) {
@@ -99,15 +105,45 @@ class MultiplayerManager {
   }
 
   async joinGame(hostId: string): Promise<void> {
+    // Ensure clean state before joining
+    if (this.peer) {
+        this.peer.destroy();
+        this.peer = null;
+    }
+
     return new Promise((resolve, reject) => {
-      // Client still uses random ID (default behavior)
+      let isConnected = false;
+      
+      // 1. Create Client Peer
       this.peer = new Peer();
 
-      this.peer.on('open', (id) => {
-        this.myId = id;
-        const conn = this.peer!.connect(hostId);
+      // 2. Set safety timeout (10 seconds)
+      const timeoutId = setTimeout(() => {
+          if (!isConnected) {
+              if (this.peer) {
+                  this.peer.destroy();
+                  this.peer = null;
+              }
+              reject(new Error("Connection timed out. The room code might be wrong, or the host is behind a firewall/different network."));
+          }
+      }, 10000);
+
+      // 3. Listen for ID generation (Peer Open)
+      this.peer.on('open', (myId) => {
+        this.myId = myId;
         
+        // 4. Connect to Host
+        const conn = this.peer!.connect(hostId, { reliable: true });
+        
+        if (!conn) {
+            clearTimeout(timeoutId);
+            reject(new Error("Could not initiate connection to host."));
+            return;
+        }
+
         conn.on('open', () => {
+          clearTimeout(timeoutId);
+          isConnected = true;
           console.log('Connected to host:', hostId);
           this.connections.push(conn);
           resolve();
@@ -126,10 +162,30 @@ class MultiplayerManager {
              if (this.onDataReceived) this.onDataReceived({ type: 'KICKED' }); // Generic disconnect signal
         });
 
-        conn.on('error', (err) => reject(err));
+        conn.on('error', (err) => {
+             if (!isConnected) {
+                 clearTimeout(timeoutId);
+                 reject(err);
+             } else {
+                 console.error("Connection error:", err);
+             }
+        });
       });
 
-      this.peer.on('error', (err) => reject(err));
+      // 5. Global Peer Errors (e.g. peer-unavailable)
+      this.peer.on('error', (err: any) => {
+         if (!isConnected) {
+             clearTimeout(timeoutId);
+             // Enhance error message for common PeerJS errors
+             if (err.type === 'peer-unavailable') {
+                 reject(new Error(`Room "${hostId}" not found. Please check the code.`));
+             } else {
+                 reject(err);
+             }
+         } else {
+             console.error("Peer error:", err);
+         }
+      });
     });
   }
 

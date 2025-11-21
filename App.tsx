@@ -205,8 +205,9 @@ const App: React.FC = () => {
           setRoomCode(code);
           setLobbyState('client_waiting'); // Move to waiting screen
           playSound('play');
-      } catch (e) {
-          alert("Could not connect to room: " + code);
+      } catch (e: any) {
+          // Show specific error from mpManager (timeout or peer-unavailable)
+          alert(e.message || "Could not connect to room: " + code);
           handleBackToLobby();
       }
       setIsConnecting(false);
