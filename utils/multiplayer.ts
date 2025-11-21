@@ -4,6 +4,16 @@ import { NetworkMessage } from '../types';
 
 type DataCallback = (data: NetworkMessage) => void;
 
+// Generate a short 6-character ID (excluding ambiguous chars like I, 1, O, 0)
+const generateShortId = () => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let result = '';
+  for (let i = 0; i < 6; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+};
+
 class MultiplayerManager {
   private peer: Peer | null = null;
   private connections: any[] = [];
@@ -21,48 +31,76 @@ class MultiplayerManager {
 
   async hostGame(): Promise<string> {
     return new Promise((resolve, reject) => {
-      // Create Peer with random ID
-      this.peer = new Peer();
+      const attemptHost = (retriesLeft: number) => {
+        if (retriesLeft === 0) {
+          reject(new Error("Unable to generate a unique Room ID. Please try again."));
+          return;
+        }
 
-      this.peer.on('open', (id) => {
-        this.myId = id;
-        console.log('Hosting game with ID:', id);
-        resolve(id);
-      });
+        const id = generateShortId();
+        // Create peer with specific short ID
+        const tempPeer = new Peer(id);
 
-      this.peer.on('connection', (conn) => {
-        console.log('New client connected:', conn.peer);
-        
-        conn.on('open', () => {
-             this.connections.push(conn);
-             // Send Room Info immediately
-             conn.send({ type: 'ROOM_INFO', payload: { name: this.roomName } });
-             
-             // Inform app that someone joined (Update List)
-             if (this.onDataReceived) {
-                 this.onDataReceived({ type: 'PLAYER_JOINED', payload: { count: this.connections.length } }); 
-             }
+        const onError = (err: any) => {
+          if (err.type === 'unavailable-id') {
+            tempPeer.destroy();
+            attemptHost(retriesLeft - 1);
+          } else {
+            reject(err);
+          }
+        };
+
+        // Temporary error listener for creation phase
+        tempPeer.on('error', onError);
+
+        tempPeer.on('open', (id) => {
+          tempPeer.off('error', onError); // Remove creation error handler
+          
+          this.peer = tempPeer;
+          this.myId = id;
+          console.log('Hosting game with ID:', id);
+          
+          // Runtime error handler
+          this.peer.on('error', (err) => console.error('Peer error:', err));
+
+          this.peer.on('connection', (conn) => {
+            console.log('New client connected:', conn.peer);
+            
+            conn.on('open', () => {
+                 this.connections.push(conn);
+                 // Send Room Info immediately
+                 conn.send({ type: 'ROOM_INFO', payload: { name: this.roomName } });
+                 
+                 // Inform app that someone joined (Update List)
+                 if (this.onDataReceived) {
+                     this.onDataReceived({ type: 'PLAYER_JOINED', payload: { count: this.connections.length } }); 
+                 }
+            });
+
+            conn.on('data', (data: any) => {
+                if (this.onDataReceived) this.onDataReceived(data);
+            });
+            
+            conn.on('close', () => {
+                // Remove closed connection
+                this.connections = this.connections.filter(c => c.peer !== conn.peer);
+                if (this.onDataReceived) {
+                     this.onDataReceived({ type: 'PLAYER_LEFT', payload: { count: this.connections.length } });
+                }
+            });
+          });
+
+          resolve(id);
         });
+      };
 
-        conn.on('data', (data: any) => {
-            if (this.onDataReceived) this.onDataReceived(data);
-        });
-        
-        conn.on('close', () => {
-            // Remove closed connection
-            this.connections = this.connections.filter(c => c.peer !== conn.peer);
-            if (this.onDataReceived) {
-                 this.onDataReceived({ type: 'PLAYER_LEFT', payload: { count: this.connections.length } });
-            }
-        });
-      });
-
-      this.peer.on('error', (err) => reject(err));
+      attemptHost(5); // Try up to 5 times to get a unique ID
     });
   }
 
   async joinGame(hostId: string): Promise<void> {
     return new Promise((resolve, reject) => {
+      // Client still uses random ID (default behavior)
       this.peer = new Peer();
 
       this.peer.on('open', (id) => {
