@@ -12,7 +12,7 @@ import GameTable from './components/GameTable';
 import PlayerHand from './components/PlayerHand';
 import ColorPicker from './components/ColorPicker';
 import CardView from './components/CardView';
-import { Volume2, VolumeX, Play, Users, Trophy, Zap, User, Copy, Wifi, WifiOff, ArrowRight, Check } from 'lucide-react';
+import { Volume2, VolumeX, Play, Users, Trophy, Zap, User, Copy, Wifi, WifiOff, ArrowRight, Check, Loader2 } from 'lucide-react';
 
 const INITIAL_HAND_SIZE = 7;
 
@@ -30,7 +30,7 @@ const App: React.FC = () => {
   const [connectedPeers, setConnectedPeers] = useState<number>(0);
   const [isConnecting, setIsConnecting] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
-  const [lobbyState, setLobbyState] = useState<'main' | 'host_setup' | 'join_setup'>('main');
+  const [lobbyState, setLobbyState] = useState<'main' | 'host_setup' | 'join_setup' | 'client_waiting'>('main');
   
   // Settings
   const [botCount, setBotCount] = useState<number>(3);
@@ -98,6 +98,8 @@ const App: React.FC = () => {
           await mpManager.joinGame(joinInput);
           setNetworkMode(NetworkMode.Client);
           setRoomCode(joinInput);
+          setLobbyState('client_waiting'); // Move to waiting screen
+          playSound('play');
       } catch (e) {
           alert("Could not connect to room: " + joinInput);
           setNetworkMode(NetworkMode.Offline);
@@ -637,6 +639,31 @@ const App: React.FC = () => {
                                          </button>
                                       )}
                                </div>
+                           </div>
+                       )}
+                       
+                       {/* Client Waiting Room */}
+                       {lobbyState === 'client_waiting' && (
+                           <div className="flex flex-col h-full items-center justify-center animate-pop">
+                               <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(34,197,94,0.6)] animate-bounce">
+                                   <Check size={40} className="text-black" strokeWidth={4} />
+                               </div>
+                               <h2 className="text-3xl font-black text-white mb-2 tracking-wide">CONNECTED!</h2>
+                               <p className="text-white/60 font-medium mb-8">Waiting for host to start...</p>
+                               
+                               <div className="bg-white/5 rounded-xl p-6 border border-white/10 text-center w-full max-w-xs relative overflow-hidden">
+                                   <p className="text-xs font-bold text-white/40 uppercase tracking-widest mb-2">ROOM CODE</p>
+                                   <div className="text-4xl font-mono font-bold text-yellow-400 tracking-widest relative z-10">{roomCode}</div>
+                                   <div className="absolute inset-0 bg-white/5 animate-pulse pointer-events-none" />
+                               </div>
+                               
+                               <div className="mt-8 flex items-center gap-2 text-white/40 text-sm font-mono">
+                                    <Loader2 className="animate-spin" size={16} /> SYNCING WITH HOST...
+                               </div>
+                               
+                               <button onClick={() => { mpManager.disconnect(); setLobbyState('join_setup'); setNetworkMode(NetworkMode.Offline); }} className="mt-8 text-white/30 hover:text-white text-sm font-bold uppercase tracking-wider transition-colors">
+                                   Cancel & Leave
+                               </button>
                            </div>
                        )}
 
