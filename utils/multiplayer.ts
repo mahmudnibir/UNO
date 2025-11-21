@@ -15,16 +15,19 @@ const generateShortId = () => {
 };
 
 // Configuration for STUN servers to navigate firewalls/NATs (NAT Traversal)
+// We use multiple servers to maximize chances of connection across different networks (WiFi/4G)
 const PEER_CONFIG: any = {
   debug: 2, // 1: Errors, 2: Warnings, 3: All
   config: {
     iceServers: [
-      // Google's public STUN servers are highly reliable for free NAT traversal
       { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:global.stun.twilio.com:3478' },
       { urls: 'stun:stun1.l.google.com:19302' },
       { urls: 'stun:stun2.l.google.com:19302' },
       { urls: 'stun:stun3.l.google.com:19302' },
       { urls: 'stun:stun4.l.google.com:19302' },
+      { urls: 'stun:stun.he.net:3478' },
+      { urls: 'stun:stun.voip.blackberry.com:3478' }
     ],
   },
 };
@@ -132,7 +135,7 @@ class MultiplayerManager {
       // 1. Create Client Peer with Config
       this.peer = new Peer(PEER_CONFIG);
 
-      // 2. Set safety timeout (10 seconds)
+      // 2. Set safety timeout (15 seconds for mobile networks)
       const timeoutId = setTimeout(() => {
           if (!isConnected) {
               if (this.peer) {
@@ -141,14 +144,18 @@ class MultiplayerManager {
               }
               reject(new Error("Connection timed out. The room code might be wrong, or the host is behind a firewall/different network."));
           }
-      }, 10000);
+      }, 15000);
 
       // 3. Listen for ID generation (Peer Open)
       this.peer.on('open', (myId) => {
         this.myId = myId;
         
         // 4. Connect to Host
-        const conn = this.peer!.connect(hostId, { reliable: true });
+        // Use JSON serialization for better stability on mobile data/some browsers
+        const conn = this.peer!.connect(hostId, { 
+            reliable: true,
+            serialization: 'json'
+        });
         
         if (!conn) {
             clearTimeout(timeoutId);

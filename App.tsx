@@ -58,6 +58,7 @@ const App: React.FC = () => {
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [showInstallHelp, setShowInstallHelp] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
+  const [wakeLock, setWakeLock] = useState<any>(null);
   
   // Settings
   const [botCount, setBotCount] = useState<number>(3);
@@ -73,6 +74,38 @@ const App: React.FC = () => {
       soundManager.play(type);
     }
   };
+
+  // Wake Lock Manager to prevent screen sleep during multiplayer
+  const requestWakeLock = async () => {
+    if ('wakeLock' in navigator) {
+      try {
+        const lock = await (navigator as any).wakeLock.request('screen');
+        setWakeLock(lock);
+        console.log('Screen Wake Lock active');
+      } catch (err) {
+        console.log('Wake Lock error:', err);
+      }
+    }
+  };
+
+  const releaseWakeLock = async () => {
+    if (wakeLock) {
+      try {
+        await wakeLock.release();
+        setWakeLock(null);
+        console.log('Screen Wake Lock released');
+      } catch (e) {
+        console.log('Error releasing lock', e);
+      }
+    }
+  };
+
+  useEffect(() => {
+      // Cleanup wake lock on unmount
+      return () => {
+          if (wakeLock) wakeLock.release();
+      };
+  }, [wakeLock]);
 
   useEffect(() => {
       // Detect iOS
@@ -165,6 +198,7 @@ const App: React.FC = () => {
   // --- Navigation Logic ---
   const handleBackToLobby = () => {
       mpManager.disconnect();
+      releaseWakeLock(); // Allow screen to sleep again
       setRoomCode("");
       setHostRoomName("");
       setConnectedPeerCount(0);
@@ -186,6 +220,7 @@ const App: React.FC = () => {
           setRoomCode(id);
           setNetworkMode(NetworkMode.Host);
           setConnectedPeerCount(0);
+          requestWakeLock(); // Keep screen on for host
       } catch (e) {
           alert("Failed to host game. PeerJS server might be busy.");
           handleBackToLobby();
@@ -204,6 +239,7 @@ const App: React.FC = () => {
           setNetworkMode(NetworkMode.Client);
           setRoomCode(code);
           setLobbyState('client_waiting'); // Move to waiting screen
+          requestWakeLock(); // Keep screen on for client
           playSound('play');
       } catch (e: any) {
           // Show specific error from mpManager (timeout or peer-unavailable)
