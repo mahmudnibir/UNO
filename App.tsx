@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Card, CardColor, CardValue, Player, GameState, GameStatus, NetworkMode, NetworkMessage 
@@ -12,7 +11,7 @@ import GameTable from './components/GameTable';
 import PlayerHand from './components/PlayerHand';
 import ColorPicker from './components/ColorPicker';
 import CardView from './components/CardView';
-import { Volume2, VolumeX, Play, Users, Trophy, Zap, User, Copy, Wifi, WifiOff, ArrowRight, Check, Loader2, X, Trash2, Edit3, Shuffle } from 'lucide-react';
+import { Volume2, VolumeX, Play, Users, Trophy, Zap, User, Copy, Wifi, WifiOff, ArrowRight, Check, Loader2, X, Trash2, Edit3, Shuffle, Download } from 'lucide-react';
 
 const INITIAL_HAND_SIZE = 7;
 
@@ -36,6 +35,9 @@ const App: React.FC = () => {
   const [lobbyState, setLobbyState] = useState<'main' | 'host_setup' | 'join_setup' | 'client_waiting'>('main');
   const [kickMessage, setKickMessage] = useState<string | null>(null);
   
+  // PWA State
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  
   // Settings
   const [botCount, setBotCount] = useState<number>(3);
   const [enableOnlineBots, setEnableOnlineBots] = useState<boolean>(false);
@@ -44,6 +46,25 @@ const App: React.FC = () => {
     if (isSoundEnabled) {
       soundManager.play(type);
     }
+  };
+
+  useEffect(() => {
+      // PWA Install Prompt Listener
+      const handler = (e: any) => {
+          e.preventDefault();
+          setDeferredPrompt(e);
+      };
+      window.addEventListener('beforeinstallprompt', handler);
+      return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstallClick = async () => {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+          setDeferredPrompt(null);
+      }
   };
 
   // Initialize Multiplayer Listeners
@@ -548,6 +569,12 @@ const App: React.FC = () => {
                         <button onClick={startGame} className="w-full py-4 bg-gradient-to-r from-red-600 to-orange-600 rounded-2xl font-black text-xl shadow-lg hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2">
                             PLAY OFFLINE <ArrowRight size={24} />
                         </button>
+                        
+                        {deferredPrompt && (
+                            <button onClick={handleInstallClick} className="w-full mt-4 py-3 bg-white/10 hover:bg-white/20 rounded-xl font-bold text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2 text-white/60 hover:text-white">
+                                <Download size={18} /> Install App
+                            </button>
+                        )}
                     </div>
                 ) : (
                    <div className="w-full bg-slate-900/50 backdrop-blur-md rounded-3xl p-6 border border-white/10 mb-6 animate-pop overflow-hidden relative min-h-[350px]">
@@ -744,7 +771,7 @@ const App: React.FC = () => {
                    </div>
                 )}
                 
-                <div className="text-white/30 text-xs font-mono">v2.2 • Multiplayer Beta</div>
+                <div className="text-white/30 text-xs font-mono">v2.3 • Multiplayer Beta</div>
             </div>
           </div>
       );

@@ -1,11 +1,15 @@
-
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>UNO Master</title>
-    <link rel="icon" type="image/svg+xml" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="10" y="5" width="80" height="90" rx="15" fill="%23dc2626" stroke="white" stroke-width="4"/><ellipse cx="50" cy="50" rx="35" ry="30" fill="white" transform="rotate(-20 50 50)"/><text x="50" y="62" font-family="sans-serif" font-weight="900" font-size="35" text-anchor="middle" fill="%23dc2626" transform="rotate(-20 50 50)" style="text-shadow: 2px 2px 0px rgba(0,0,0,0.2);">UNO</text></svg>' />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="apple-touch-icon" href="/icon.svg" />
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;900&display=swap');
@@ -119,6 +123,15 @@
         "peerjs": "https://esm.sh/peerjs@1.5.2?bundle-deps"
       }
     }
+    </script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then(reg => console.log('SW registered'))
+            .catch(err => console.log('SW registration failed', err));
+        });
+      }
     </script>
   </head>
   <body class="h-screen w-screen overflow-hidden select-none text-white bg-[#0A0A0A]">
