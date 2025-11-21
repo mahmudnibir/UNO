@@ -41,7 +41,7 @@ const CardView: React.FC<CardViewProps> = ({
   const cursorClass = isInteractive ? 'cursor-pointer' : 'cursor-default';
   
   const disabledClasses = disabled 
-    ? 'opacity-50 brightness-75 grayscale-[0.3]' 
+    ? 'brightness-90 grayscale-[0.2]' // Removed opacity reduction for better visibility
     : 'opacity-100 shadow-[0_4px_10px_rgba(0,0,0,0.5)]';
 
   // Playable Glow

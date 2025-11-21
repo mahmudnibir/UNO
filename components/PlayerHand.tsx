@@ -112,14 +112,15 @@ const PlayerHand: React.FC<PlayerHandProps> = ({
                     card={card} 
                     size="xl" 
                     playable={canPlay}
-                    disabled={!canPlay} // Disabled purely on playable state
+                    // We do NOT set disabled={true} here because CardView's disabled prop adds internal styles we might not want.
+                    // Instead we control everything via className below.
                     onClick={() => canPlay && onPlayCard(card)}
                     hoverEffect={true}
                     className={`
                         shadow-2xl 
                         ${canPlay 
                             ? 'brightness-110 hover:shadow-[0_0_40px_rgba(255,255,255,0.5)]' 
-                            : 'grayscale-[0.8] opacity-60 brightness-50' // Make non-playable cards much darker
+                            : 'grayscale-[0.5] opacity-100 brightness-90' // Updated: Solid opacity, slight dim
                         }
                     `}
                     />
