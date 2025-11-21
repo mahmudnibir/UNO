@@ -135,10 +135,8 @@ const App: React.FC = () => {
             setHostRoomName(data.payload.name);
         }
         if (data.type === 'KICKED') {
-            setLobbyState('main');
-            setNetworkMode(NetworkMode.Offline);
+            handleBackToLobby();
             setKickMessage("You were disconnected by the host.");
-            mpManager.disconnect();
         }
       } else if (networkMode === NetworkMode.Host) {
         // --- Host Logic ---
@@ -164,6 +162,21 @@ const App: React.FC = () => {
     });
   }, [networkMode, gameState]); // Re-bind when gameState changes to avoid stale closures, or rely on Ref
 
+  // --- Navigation Logic ---
+  const handleBackToLobby = () => {
+      mpManager.disconnect();
+      setRoomCode("");
+      setHostRoomName("");
+      setConnectedPeerCount(0);
+      setJoinInput("");
+      setKickMessage(null);
+      setLobbyState('main');
+      // We don't necessarily change networkMode to offline here immediately if we are just navigating panels,
+      // but usually going back to main menu means exiting multiplayer setup.
+      setNetworkMode(NetworkMode.Offline);
+      setEnableOnlineBots(false);
+  };
+
   // --- Hosting ---
   const startHost = async () => {
       setIsConnecting(true);
@@ -175,8 +188,7 @@ const App: React.FC = () => {
           setConnectedPeerCount(0);
       } catch (e) {
           alert("Failed to host game. PeerJS server might be busy.");
-          setNetworkMode(NetworkMode.Offline);
-          setLobbyState('main');
+          handleBackToLobby();
       }
       setIsConnecting(false);
   };
@@ -195,8 +207,7 @@ const App: React.FC = () => {
           playSound('play');
       } catch (e) {
           alert("Could not connect to room: " + code);
-          setNetworkMode(NetworkMode.Offline);
-          setLobbyState('main');
+          handleBackToLobby();
       }
       setIsConnecting(false);
   };
@@ -273,7 +284,7 @@ const App: React.FC = () => {
        startCard = deck.shift()!;
     }
 
-    const newGameState = {
+    const newGameState: GameState = {
       deck,
       discardPile: [startCard],
       players,
@@ -586,11 +597,7 @@ const App: React.FC = () => {
           type: 'danger',
           onConfirm: () => {
               setGameState(null);
-              setLobbyState('main');
-              if (networkMode === NetworkMode.Host || networkMode === NetworkMode.Client) {
-                    mpManager.disconnect();
-                    setNetworkMode(NetworkMode.Offline);
-              }
+              handleBackToLobby();
               setConfirmModal(prev => ({ ...prev, isOpen: false }));
           }
       });
@@ -618,9 +625,9 @@ const App: React.FC = () => {
       ];
 
       return (
-          <div className="fixed inset-0 bg-[#0f172a] overflow-y-auto overflow-x-hidden flex flex-col">
+          <div className="fixed inset-0 bg-[#0f172a] overflow-hidden flex flex-col">
             {/* Fixed Background Layer */}
-            <div className="fixed inset-0 z-0 pointer-events-none">
+            <div className="absolute inset-0 z-0 pointer-events-none">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(51,65,85,0.4)_0%,_rgba(15,23,42,1)_100%)]"></div>
                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5"></div>
                 
@@ -635,7 +642,7 @@ const App: React.FC = () => {
                 </div>
             </div>
 
-            {/* PWA Install Help Modal - Fixed Bottom Right */}
+            {/* PWA Install Help Modal */}
             {showInstallHelp && (
                 <div className="fixed bottom-4 right-4 max-w-[calc(100vw-2rem)] md:max-w-md bg-slate-900/95 backdrop-blur-xl p-6 rounded-2xl border border-yellow-400/30 shadow-[0_0_50px_rgba(0,0,0,0.8)] z-[100] animate-pop">
                     <button 
@@ -689,322 +696,335 @@ const App: React.FC = () => {
                 </div>
             )}
 
-            {/* Scrollable Content Wrapper */}
-            <div className="relative z-10 min-h-full w-full flex flex-col items-center justify-center py-6 px-4 md:py-12 md:px-8">
-               
-               {/* Logo with better animation - Scaled down for Mobile */}
-               <div className="relative mb-8 md:mb-12 group cursor-default select-none animate-float scale-90 md:scale-100 origin-center text-center">
-                  <div className="absolute inset-0 bg-red-500 blur-[60px] opacity-20 rounded-full"></div>
-                  <h1 className="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-red-500 to-red-700 drop-shadow-[0_10px_10px_rgba(0,0,0,0.5)] leading-none transform -rotate-6 relative z-10">
-                    UNO
-                  </h1>
-                  <div className="absolute -bottom-3 md:-bottom-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-yellow-400 to-orange-500 text-black font-black text-sm md:text-xl tracking-[0.4em] md:tracking-[0.5em] px-4 md:px-6 py-1 transform -rotate-3 skew-x-12 shadow-xl border-2 border-white/20 z-20 whitespace-nowrap">
-                    MASTER
-                  </div>
-               </div>
-
-               {/* Status Wrapper (Offline/Kicked) */}
-               <div className="w-full max-w-md flex flex-col items-center gap-3 mb-6">
-                    {isOffline && (
-                        <div className="bg-orange-500/20 border border-orange-500/50 px-4 py-1.5 rounded-full flex items-center gap-2">
-                            <WifiOff size={14} className="text-orange-400" />
-                            <span className="text-orange-300 text-xs font-bold uppercase">Offline Mode</span>
+            {/* Main Scrollable Area - Content centers if it fits, scrolls if it doesn't */}
+            <div className="relative z-10 w-full h-full overflow-y-auto custom-scrollbar flex flex-col">
+                <div className="min-h-full flex flex-col items-center justify-center p-4 md:p-8 w-full">
+                
+                    {/* Logo */}
+                    <div className="relative mb-8 md:mb-12 group cursor-default select-none animate-float scale-90 md:scale-100 origin-center text-center shrink-0">
+                        <div className="absolute inset-0 bg-red-500 blur-[60px] opacity-20 rounded-full"></div>
+                        <h1 className="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-red-500 to-red-700 drop-shadow-[0_10px_10px_rgba(0,0,0,0.5)] leading-none transform -rotate-6 relative z-10">
+                            UNO
+                        </h1>
+                        <div className="absolute -bottom-3 md:-bottom-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-yellow-400 to-orange-500 text-black font-black text-sm md:text-xl tracking-[0.4em] md:tracking-[0.5em] px-4 md:px-6 py-1 transform -rotate-3 skew-x-12 shadow-xl border-2 border-white/20 z-20 whitespace-nowrap">
+                            MASTER
                         </div>
-                    )}
+                    </div>
 
-                    {kickMessage && (
-                        <div className="w-full bg-red-500/20 border border-red-500 text-red-200 px-4 py-3 rounded-xl flex items-center gap-2 animate-pulse">
-                            <X size={20} /> {kickMessage}
-                        </div>
-                    )}
-               </div>
-
-               {/* MENU CARD */}
-               <div className="w-full max-w-md bg-slate-900/70 backdrop-blur-2xl border border-white/10 rounded-[2rem] shadow-2xl overflow-hidden ring-1 ring-white/5 flex flex-col my-auto">
-                  
-                  {/* TABS */}
-                  <div className="flex p-2 gap-2 bg-black/20 shrink-0">
-                     <button 
-                       onClick={() => { setNetworkMode(NetworkMode.Offline); setLobbyState('main'); }}
-                       className={`flex-1 py-3 rounded-xl font-black text-xs md:text-sm uppercase tracking-widest transition-all duration-300 ${networkMode === NetworkMode.Offline ? 'bg-white text-slate-900 shadow-lg scale-100' : 'text-white/40 hover:bg-white/5 hover:text-white scale-95'}`}
-                     >
-                       Single Player
-                     </button>
-                     <button 
-                       onClick={() => { if(!isOffline) { setNetworkMode(NetworkMode.Host); setLobbyState('main'); }}}
-                       disabled={isOffline}
-                       className={`flex-1 py-3 rounded-xl font-black text-xs md:text-sm uppercase tracking-widest transition-all duration-300 ${networkMode !== NetworkMode.Offline ? 'bg-white text-slate-900 shadow-lg scale-100' : 'text-white/40 hover:bg-white/5 hover:text-white scale-95'} ${isOffline ? 'opacity-30 cursor-not-allowed' : ''}`}
-                     >
-                       Multiplayer
-                     </button>
-                  </div>
-
-                  {/* CONTENT BODY */}
-                  <div className="p-4 md:p-6 relative flex-1 flex flex-col">
-                     
-                     {/* SINGLE PLAYER VIEW */}
-                     {networkMode === NetworkMode.Offline && (
-                        <div className="flex flex-col gap-4 animate-pop">
-                            <div className="text-center mb-2 md:mb-4">
-                               <h3 className="text-white/90 text-lg font-bold mb-1">Select Opponents</h3>
-                               <p className="text-white/40 text-xs uppercase tracking-widest">Challenge AI Bots</p>
+                    {/* Status Wrapper */}
+                    <div className="w-full max-w-md flex flex-col items-center gap-3 mb-6 shrink-0">
+                        {isOffline && (
+                            <div className="bg-orange-500/20 border border-orange-500/50 px-4 py-1.5 rounded-full flex items-center gap-2">
+                                <WifiOff size={14} className="text-orange-400" />
+                                <span className="text-orange-300 text-xs font-bold uppercase">Offline Mode</span>
                             </div>
+                        )}
 
-                            <div className="grid grid-cols-3 gap-3 md:gap-4">
-                               {[1, 2, 3].map(num => (
-                                  <button 
-                                    key={num} 
-                                    onClick={() => setBotCount(num)}
-                                    className={`relative aspect-square rounded-2xl border-2 flex flex-col items-center justify-center gap-2 transition-all duration-300 group ${botCount === num ? 'bg-red-600/20 border-red-500 shadow-[0_0_30px_rgba(220,38,38,0.3)]' : 'bg-white/5 border-transparent hover:bg-white/10'}`}
-                                  >
-                                     {botCount === num && <div className="absolute inset-0 bg-red-500/10 animate-pulse rounded-2xl"></div>}
-                                     <Users size={24} className={`${botCount === num ? 'text-red-400' : 'text-white/20 group-hover:text-white/60'} md:w-7 md:h-7`} />
-                                     <span className={`font-black text-xl md:text-2xl ${botCount === num ? 'text-white' : 'text-white/40'}`}>{num}</span>
-                                  </button>
-                               ))}
+                        {kickMessage && (
+                            <div className="w-full bg-red-500/20 border border-red-500 text-red-200 px-4 py-3 rounded-xl flex items-center gap-2 animate-pulse">
+                                <X size={20} /> {kickMessage}
                             </div>
+                        )}
+                    </div>
 
+                    {/* MENU CARD */}
+                    <div className="w-full max-w-md bg-slate-900/70 backdrop-blur-2xl border border-white/10 rounded-[2rem] shadow-2xl flex flex-col overflow-hidden shrink-0">
+                        
+                        {/* TABS */}
+                        <div className="flex p-2 gap-2 bg-black/20 shrink-0">
                             <button 
-                              onClick={startGame}
-                              className="w-full py-4 mt-4 bg-gradient-to-r from-red-600 to-orange-600 rounded-xl font-black text-lg md:text-xl text-white shadow-lg hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 group"
+                                onClick={() => { handleBackToLobby(); }}
+                                className={`flex-1 py-3 rounded-xl font-black text-xs md:text-sm uppercase tracking-widest transition-all duration-300 ${networkMode === NetworkMode.Offline ? 'bg-white text-slate-900 shadow-lg scale-100' : 'text-white/40 hover:bg-white/5 hover:text-white scale-95'}`}
                             >
-                               <span>START GAME</span>
-                               <Play size={24} fill="currentColor" className="group-hover:translate-x-1 transition-transform" />
+                                Single Player
+                            </button>
+                            <button 
+                                onClick={() => { if(!isOffline) { setNetworkMode(NetworkMode.Host); setLobbyState('main'); }}}
+                                disabled={isOffline}
+                                className={`flex-1 py-3 rounded-xl font-black text-xs md:text-sm uppercase tracking-widest transition-all duration-300 ${networkMode !== NetworkMode.Offline ? 'bg-white text-slate-900 shadow-lg scale-100' : 'text-white/40 hover:bg-white/5 hover:text-white scale-95'} ${isOffline ? 'opacity-30 cursor-not-allowed' : ''}`}
+                            >
+                                Multiplayer
                             </button>
                         </div>
-                     )}
 
-                     {/* MULTIPLAYER VIEW */}
-                     {networkMode !== NetworkMode.Offline && (
-                        <div className="flex flex-col gap-4 animate-pop h-full">
-                           {/* Modes: Main, Host, Join, Lobby */}
-                           {lobbyState === 'main' && (
-                              <div className="flex flex-col gap-3 md:gap-4 justify-center h-full py-2">
-                                 <button 
-                                   onClick={() => setLobbyState('host_setup')}
-                                   className="group relative w-full p-4 md:p-6 bg-gradient-to-br from-indigo-600/20 to-indigo-900/20 border border-indigo-500/30 hover:border-indigo-400 rounded-2xl flex items-center gap-4 transition-all hover:shadow-[0_0_30px_rgba(99,102,241,0.3)] hover:-translate-y-1"
-                                 >
-                                    <div className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-indigo-600 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform shrink-0">
-                                       <Wifi size={24} className="text-white" />
+                        {/* CONTENT BODY - Natural Height */}
+                        <div className="p-4 md:p-6 relative flex flex-col w-full">
+                            
+                            {/* SINGLE PLAYER VIEW */}
+                            {networkMode === NetworkMode.Offline && (
+                                <div className="flex flex-col gap-4 animate-pop">
+                                    <div className="text-center mb-2 md:mb-4">
+                                    <h3 className="text-white/90 text-lg font-bold mb-1">Select Opponents</h3>
+                                    <p className="text-white/40 text-xs uppercase tracking-widest">Challenge AI Bots</p>
                                     </div>
-                                    <div className="text-left">
-                                       <h3 className="text-white font-black text-lg md:text-xl tracking-wide">HOST GAME</h3>
-                                       <p className="text-indigo-200/60 text-xs font-bold uppercase">Create a room</p>
+
+                                    <div className="grid grid-cols-3 gap-3 md:gap-4">
+                                    {[1, 2, 3].map(num => (
+                                        <button 
+                                            key={num} 
+                                            onClick={() => setBotCount(num)}
+                                            className={`relative aspect-square rounded-2xl border-2 flex flex-col items-center justify-center gap-2 transition-all duration-300 group ${botCount === num ? 'bg-red-600/20 border-red-500 shadow-[0_0_30px_rgba(220,38,38,0.3)]' : 'bg-white/5 border-transparent hover:bg-white/10'}`}
+                                        >
+                                            {botCount === num && <div className="absolute inset-0 bg-red-500/10 animate-pulse rounded-2xl"></div>}
+                                            <Users size={24} className={`${botCount === num ? 'text-red-400' : 'text-white/20 group-hover:text-white/60'} md:w-7 md:h-7`} />
+                                            <span className={`font-black text-xl md:text-2xl ${botCount === num ? 'text-white' : 'text-white/40'}`}>{num}</span>
+                                        </button>
+                                    ))}
                                     </div>
-                                 </button>
 
-                                 <button 
-                                   onClick={() => { setLobbyState('join_setup'); setNetworkMode(NetworkMode.Client); }}
-                                   className="group relative w-full p-4 md:p-6 bg-gradient-to-br from-emerald-600/20 to-emerald-900/20 border border-emerald-500/30 hover:border-emerald-400 rounded-2xl flex items-center gap-4 transition-all hover:shadow-[0_0_30px_rgba(16,185,129,0.3)] hover:-translate-y-1"
-                                 >
-                                    <div className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-emerald-600 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform shrink-0">
-                                       <Users size={24} className="text-white" />
+                                    <button 
+                                    onClick={startGame}
+                                    className="w-full py-4 mt-4 bg-gradient-to-r from-red-600 to-orange-600 rounded-xl font-black text-lg md:text-xl text-white shadow-lg hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 group"
+                                    >
+                                    <span>START GAME</span>
+                                    <Play size={24} fill="currentColor" className="group-hover:translate-x-1 transition-transform" />
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* MULTIPLAYER VIEW */}
+                            {networkMode !== NetworkMode.Offline && (
+                                <div className="flex flex-col gap-4 animate-pop w-full">
+                                {/* Modes: Main, Host, Join, Lobby */}
+                                {lobbyState === 'main' && (
+                                    <div className="flex flex-col gap-3 md:gap-4 justify-center py-2">
+                                        <button 
+                                            onClick={() => setLobbyState('host_setup')}
+                                            className="group relative w-full p-4 md:p-6 bg-gradient-to-br from-indigo-600/20 to-indigo-900/20 border border-indigo-500/30 hover:border-indigo-400 rounded-2xl flex items-center gap-4 transition-all hover:shadow-[0_0_30px_rgba(99,102,241,0.3)] hover:-translate-y-1"
+                                        >
+                                            <div className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-indigo-600 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform shrink-0">
+                                                <Wifi size={24} className="text-white" />
+                                            </div>
+                                            <div className="text-left">
+                                                <h3 className="text-white font-black text-lg md:text-xl tracking-wide">HOST GAME</h3>
+                                                <p className="text-indigo-200/60 text-xs font-bold uppercase">Create a room</p>
+                                            </div>
+                                        </button>
+
+                                        <button 
+                                            onClick={() => { setLobbyState('join_setup'); setNetworkMode(NetworkMode.Client); }}
+                                            className="group relative w-full p-4 md:p-6 bg-gradient-to-br from-emerald-600/20 to-emerald-900/20 border border-emerald-500/30 hover:border-emerald-400 rounded-2xl flex items-center gap-4 transition-all hover:shadow-[0_0_30px_rgba(16,185,129,0.3)] hover:-translate-y-1"
+                                        >
+                                            <div className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-emerald-600 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform shrink-0">
+                                                <Users size={24} className="text-white" />
+                                            </div>
+                                            <div className="text-left">
+                                                <h3 className="text-white font-black text-lg md:text-xl tracking-wide">JOIN GAME</h3>
+                                                <p className="text-emerald-200/60 text-xs font-bold uppercase">Enter Code</p>
+                                            </div>
+                                        </button>
                                     </div>
-                                    <div className="text-left">
-                                       <h3 className="text-white font-black text-lg md:text-xl tracking-wide">JOIN GAME</h3>
-                                       <p className="text-emerald-200/60 text-xs font-bold uppercase">Enter Code</p>
+                                )}
+
+                                {/* Host Setup Screen */}
+                                {lobbyState === 'host_setup' && (
+                                    <div className="flex flex-col w-full">
+                                        {/* Header */}
+                                        <div className="flex items-center justify-between mb-4 shrink-0">
+                                            <button onClick={handleBackToLobby} className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-colors">
+                                                <ArrowRight size={16} className="rotate-180" />
+                                            </button>
+                                            <span className="text-white/40 text-xs font-bold uppercase tracking-widest">Lobby Settings</span>
+                                            <div className="w-8" />
+                                        </div>
+
+                                        {!roomCode ? (
+                                            <div className="flex flex-col gap-6 pb-2">
+                                                <div className="text-center">
+                                                    <div className="w-16 h-16 md:w-20 md:h-20 bg-indigo-600/20 rounded-full mx-auto mb-4 flex items-center justify-center border border-indigo-500/50 text-indigo-400">
+                                                        <Edit3 size={28} />
+                                                    </div>
+                                                    <h3 className="text-white font-bold text-xl">Name Your Room</h3>
+                                                    <p className="text-white/40 text-sm mt-1">Give your game a friendly name</p>
+                                                </div>
+                                                
+                                                <div className="flex flex-col gap-2">
+                                                    <label className="text-xs font-bold text-indigo-300 uppercase tracking-wider ml-1">Room Name</label>
+                                                    <input 
+                                                        value={roomName}
+                                                        onChange={(e) => setRoomName(e.target.value)}
+                                                        className="w-full bg-black/30 border-2 border-white/10 focus:border-indigo-500 rounded-xl p-4 text-left text-white font-bold text-lg outline-none transition-all"
+                                                        placeholder="e.g. Friday Night UNO"
+                                                        maxLength={15}
+                                                    />
+                                                </div>
+
+                                                <button 
+                                                    onClick={startHost}
+                                                    className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-black text-lg text-white shadow-[0_4px_14px_0_rgba(79,70,229,0.39)] hover:shadow-[0_6px_20px_rgba(79,70,229,0.23)] transition-all flex items-center justify-center gap-2 active:scale-95 mt-2"
+                                                >
+                                                    CREATE ROOM
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div className="flex flex-col h-full">
+                                                <div className="bg-black/40 rounded-xl p-4 border border-white/10 mb-4 relative group cursor-pointer flex flex-col items-center justify-center gap-2 shrink-0" onClick={handleCopyCode}>
+                                                    <div className="text-center w-full">
+                                                        <p className="text-white/40 text-[10px] font-bold uppercase tracking-widest mb-1">Room Code</p>
+                                                        <p className="text-4xl md:text-5xl font-mono font-black text-yellow-400 tracking-[0.2em] break-all px-2 select-all leading-tight">{roomCode}</p>
+                                                    </div>
+                                                    <div className="flex gap-2 mt-2 relative z-20">
+                                                            <button onClick={(e) => { e.stopPropagation(); handleCopyCode(); }} className="flex items-center gap-1 bg-white/10 hover:bg-white/20 px-3 py-1 rounded-full text-xs font-bold text-white transition-colors">
+                                                                <Copy size={12} /> Copy
+                                                            </button>
+                                                            {navigator.share && (
+                                                                <button onClick={(e) => { e.stopPropagation(); handleShareCode(); }} className="flex items-center gap-1 bg-indigo-500/20 hover:bg-indigo-500/40 px-3 py-1 rounded-full text-xs font-bold text-indigo-300 transition-colors">
+                                                                    <Share size={12} /> Share
+                                                                </button>
+                                                            )}
+                                                    </div>
+                                                    {copiedId && <div className="absolute inset-0 bg-green-500/90 flex items-center justify-center rounded-xl animate-in fade-in duration-200 z-30"><span className="font-black text-black">COPIED!</span></div>}
+                                                </div>
+
+                                                <div className="flex-1 bg-white/5 rounded-xl p-4 mb-4 overflow-y-auto custom-scrollbar max-h-[200px]">
+                                                    <p className="text-white/40 text-xs font-bold uppercase tracking-widest mb-3 sticky top-0 bg-[#182235] pb-2 z-10">Players ({connectedPeerCount + 1}/4)</p>
+                                                    
+                                                    {/* Host */}
+                                                    <div className="flex items-center gap-3 p-3 bg-indigo-500/10 rounded-lg border border-indigo-500/20 mb-2">
+                                                        <div className="w-2 h-2 rounded-full bg-green-400 shadow-[0_0_10px_currentColor]"></div>
+                                                        <span className="text-white font-bold text-sm flex-1">You (Host)</span>
+                                                        <Zap size={14} className="text-yellow-400" />
+                                                    </div>
+
+                                                    {/* Guests */}
+                                                    {Array.from({ length: connectedPeerCount }).map((_, i) => (
+                                                        <div key={i} className="flex items-center gap-3 p-3 bg-white/5 rounded-lg border border-white/5 mb-2 animate-in slide-in-from-left-2">
+                                                            <div className="w-2 h-2 rounded-full bg-blue-400"></div>
+                                                            <span className="text-white/80 font-medium text-sm flex-1">Guest {i + 1}</span>
+                                                            <button onClick={() => handleKickPlayer(i)} className="text-white/20 hover:text-red-400 transition-colors"><X size={14} /></button>
+                                                        </div>
+                                                    ))}
+
+                                                    {/* Empty Slots */}
+                                                    {Array.from({ length: 3 - connectedPeerCount }).map((_, i) => (
+                                                        <div key={`empty-${i}`} className="flex items-center gap-3 p-3 rounded-lg border border-dashed border-white/5 mb-2 opacity-50">
+                                                            <div className="w-2 h-2 rounded-full bg-white/10"></div>
+                                                            <span className="text-white/20 font-medium text-sm italic">Waiting...</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                
+                                                <div className="flex items-center justify-between mb-4 px-2 shrink-0">
+                                                    <span className="text-xs font-bold text-white/60 uppercase">Fill with Bots?</span>
+                                                    <button onClick={() => setEnableOnlineBots(!enableOnlineBots)} className={`w-10 h-6 rounded-full relative transition-colors ${enableOnlineBots ? 'bg-green-500' : 'bg-white/10'}`}>
+                                                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all shadow-sm ${enableOnlineBots ? 'left-5' : 'left-1'}`}></div>
+                                                    </button>
+                                                </div>
+
+                                                <button 
+                                                    onClick={startGame}
+                                                    disabled={connectedPeerCount === 0 && !enableOnlineBots}
+                                                    className={`w-full py-4 rounded-xl font-black text-lg transition-all flex items-center justify-center gap-2 shrink-0 ${connectedPeerCount > 0 || enableOnlineBots ? 'bg-green-500 text-black hover:bg-green-400 shadow-[0_0_20px_rgba(34,197,94,0.4)]' : 'bg-white/10 text-white/20 cursor-not-allowed'}`}
+                                                >
+                                                    START GAME
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
-                                 </button>
-                              </div>
-                           )}
+                                )}
 
-                           {/* Host Setup Screen */}
-                           {lobbyState === 'host_setup' && (
-                              <div className="flex flex-col h-full">
-                                  {/* Header */}
-                                  <div className="flex items-center justify-between mb-4 shrink-0">
-                                     <button onClick={() => setLobbyState('main')} className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-colors">
-                                        <ArrowRight size={16} className="rotate-180" />
-                                     </button>
-                                     <span className="text-white/40 text-xs font-bold uppercase tracking-widest">Lobby Settings</span>
-                                     <div className="w-8" />
-                                  </div>
+                                {/* Join Setup Screen */}
+                                {lobbyState === 'join_setup' && (
+                                    <div className="flex flex-col w-full">
+                                        <div className="flex items-center justify-between mb-6 shrink-0">
+                                            <button onClick={handleBackToLobby} className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-colors">
+                                                <ArrowRight size={16} className="rotate-180" />
+                                            </button>
+                                            <span className="text-white/40 text-xs font-bold uppercase tracking-widest">Join Room</span>
+                                            <div className="w-8" />
+                                        </div>
 
-                                  {!roomCode ? (
-                                      <div className="flex flex-col gap-4">
-                                          <div className="text-center py-4">
-                                              <div className="w-16 h-16 md:w-20 md:h-20 bg-indigo-600/20 rounded-full mx-auto mb-4 flex items-center justify-center border border-indigo-500/50 text-indigo-400">
-                                                  <Edit3 size={28} />
-                                              </div>
-                                              <h3 className="text-white font-bold text-xl">Name Your Room</h3>
-                                          </div>
-                                          
-                                          <input 
-                                            value={roomName}
-                                            onChange={(e) => setRoomName(e.target.value)}
-                                            className="w-full bg-black/30 border-2 border-white/10 focus:border-indigo-500 rounded-xl p-4 text-center text-white font-bold text-lg outline-none transition-all mb-2"
-                                            placeholder="e.g. Friday Night UNO"
-                                            maxLength={15}
-                                          />
+                                        <div className="flex-1 flex flex-col justify-center items-center text-center gap-6 pb-2">
+                                            <div>
+                                                <div className="w-16 h-16 md:w-20 md:h-20 bg-emerald-600/20 rounded-full mx-auto mb-4 flex items-center justify-center border border-emerald-500/50 text-emerald-400 animate-pulse">
+                                                    <Wifi size={28} />
+                                                </div>
+                                                <p className="text-white/60 text-sm">Enter the Room Code provided by the host</p>
+                                            </div>
 
-                                          <button 
-                                            onClick={startHost}
-                                            className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-black text-lg text-white shadow-lg transition-all flex items-center justify-center gap-2"
-                                          >
-                                              CREATE ROOM
-                                          </button>
-                                      </div>
-                                  ) : (
-                                      <div className="flex flex-col h-full">
-                                          <div className="bg-black/40 rounded-xl p-4 border border-white/10 mb-4 relative group cursor-pointer flex flex-col items-center justify-center gap-2 shrink-0" onClick={handleCopyCode}>
-                                              <div className="text-center w-full">
-                                                  <p className="text-white/40 text-[10px] font-bold uppercase tracking-widest mb-1">Room Code</p>
-                                                  <p className="text-4xl md:text-5xl font-mono font-black text-yellow-400 tracking-[0.2em] break-all px-2 select-all leading-tight">{roomCode}</p>
-                                              </div>
-                                              <div className="flex gap-2 mt-2 relative z-20">
-                                                   <button onClick={(e) => { e.stopPropagation(); handleCopyCode(); }} className="flex items-center gap-1 bg-white/10 hover:bg-white/20 px-3 py-1 rounded-full text-xs font-bold text-white transition-colors">
-                                                      <Copy size={12} /> Copy
-                                                   </button>
-                                                   {navigator.share && (
-                                                       <button onClick={(e) => { e.stopPropagation(); handleShareCode(); }} className="flex items-center gap-1 bg-indigo-500/20 hover:bg-indigo-500/40 px-3 py-1 rounded-full text-xs font-bold text-indigo-300 transition-colors">
-                                                          <Share size={12} /> Share
-                                                       </button>
-                                                   )}
-                                              </div>
-                                              {copiedId && <div className="absolute inset-0 bg-green-500/90 flex items-center justify-center rounded-xl animate-in fade-in duration-200 z-30"><span className="font-black text-black">COPIED!</span></div>}
-                                          </div>
+                                            <div className="relative w-full">
+                                                <input 
+                                                    value={joinInput}
+                                                    onChange={(e) => setJoinInput(e.target.value)}
+                                                    className="w-full bg-black/30 border-2 border-white/10 focus:border-emerald-500 rounded-xl p-4 pr-12 text-center text-white font-mono font-black text-3xl tracking-widest uppercase outline-none transition-all placeholder:text-white/5 placeholder:tracking-normal placeholder:text-xl"
+                                                    placeholder="CODE"
+                                                    maxLength={6}
+                                                />
+                                                <button 
+                                                    onClick={async () => {
+                                                        try {
+                                                            const text = await navigator.clipboard.readText();
+                                                            setJoinInput(text);
+                                                        } catch(e) {}
+                                                    }}
+                                                    className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-white/30 hover:text-white transition-colors"
+                                                    title="Paste"
+                                                >
+                                                    <Clipboard size={20} />
+                                                </button>
+                                            </div>
 
-                                          <div className="flex-1 min-h-[150px] bg-white/5 rounded-xl p-4 mb-4 overflow-y-auto custom-scrollbar">
-                                              <p className="text-white/40 text-xs font-bold uppercase tracking-widest mb-3 sticky top-0 bg-[#182235] pb-2 z-10">Players ({connectedPeerCount + 1}/4)</p>
-                                              
-                                              {/* Host */}
-                                              <div className="flex items-center gap-3 p-3 bg-indigo-500/10 rounded-lg border border-indigo-500/20 mb-2">
-                                                  <div className="w-2 h-2 rounded-full bg-green-400 shadow-[0_0_10px_currentColor]"></div>
-                                                  <span className="text-white font-bold text-sm flex-1">You (Host)</span>
-                                                  <Zap size={14} className="text-yellow-400" />
-                                              </div>
+                                            <button 
+                                                onClick={joinGame}
+                                                disabled={!joinInput || isConnecting}
+                                                className={`w-full py-4 rounded-xl font-black text-lg transition-all flex items-center justify-center gap-2 ${joinInput && !isConnecting ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg' : 'bg-white/10 text-white/20 cursor-not-allowed'}`}
+                                            >
+                                                {isConnecting ? <Loader2 size={24} className="animate-spin" /> : 'JOIN LOBBY'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
 
-                                              {/* Guests */}
-                                              {Array.from({ length: connectedPeerCount }).map((_, i) => (
-                                                  <div key={i} className="flex items-center gap-3 p-3 bg-white/5 rounded-lg border border-white/5 mb-2 animate-in slide-in-from-left-2">
-                                                      <div className="w-2 h-2 rounded-full bg-blue-400"></div>
-                                                      <span className="text-white/80 font-medium text-sm flex-1">Guest {i + 1}</span>
-                                                      <button onClick={() => handleKickPlayer(i)} className="text-white/20 hover:text-red-400 transition-colors"><X size={14} /></button>
-                                                  </div>
-                                              ))}
+                                {/* Waiting Screen */}
+                                {lobbyState === 'client_waiting' && (
+                                    <div className="flex flex-col h-full items-center justify-center text-center gap-6">
+                                        <div className="w-20 h-20 md:w-24 md:h-24 bg-gradient-to-br from-green-400 to-emerald-600 rounded-full flex items-center justify-center shadow-[0_0_40px_rgba(34,197,94,0.5)] animate-bounce">
+                                            <Check size={40} className="text-white drop-shadow-md" strokeWidth={4} />
+                                        </div>
+                                        <div>
+                                                <h2 className="text-2xl md:text-3xl font-black text-white mb-2 tracking-tight">YOU'RE IN!</h2>
+                                                <p className="text-emerald-200 font-medium">Waiting for host to start...</p>
+                                        </div>
+                                        
+                                        <div className="bg-white/5 rounded-xl p-4 w-full border border-white/5">
+                                            <p className="text-white/30 text-[10px] font-bold uppercase tracking-widest mb-1">Connected to Room</p>
+                                            <p className="text-3xl font-mono font-black text-white tracking-widest uppercase">{roomCode}</p>
+                                            {hostRoomName && <p className="text-sm text-emerald-400 font-bold mt-1">{hostRoomName}</p>}
+                                        </div>
 
-                                              {/* Empty Slots */}
-                                              {Array.from({ length: 3 - connectedPeerCount }).map((_, i) => (
-                                                  <div key={`empty-${i}`} className="flex items-center gap-3 p-3 rounded-lg border border-dashed border-white/5 mb-2 opacity-50">
-                                                      <div className="w-2 h-2 rounded-full bg-white/10"></div>
-                                                      <span className="text-white/20 font-medium text-sm italic">Waiting...</span>
-                                                  </div>
-                                              ))}
-                                          </div>
-                                          
-                                          <div className="flex items-center justify-between mb-4 px-2 shrink-0">
-                                              <span className="text-xs font-bold text-white/60 uppercase">Fill with Bots?</span>
-                                              <button onClick={() => setEnableOnlineBots(!enableOnlineBots)} className={`w-10 h-6 rounded-full relative transition-colors ${enableOnlineBots ? 'bg-green-500' : 'bg-white/10'}`}>
-                                                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all shadow-sm ${enableOnlineBots ? 'left-5' : 'left-1'}`}></div>
-                                              </button>
-                                          </div>
+                                        <button 
+                                            onClick={handleBackToLobby}
+                                            className="mt-4 px-6 py-2 rounded-full bg-white/5 hover:bg-white/10 text-white/50 hover:text-white transition-all text-xs font-bold uppercase tracking-wider"
+                                        >
+                                            Leave Room
+                                        </button>
+                                    </div>
+                                )}
 
-                                          <button 
-                                              onClick={startGame}
-                                              disabled={connectedPeerCount === 0 && !enableOnlineBots}
-                                              className={`w-full py-4 rounded-xl font-black text-lg transition-all flex items-center justify-center gap-2 shrink-0 ${connectedPeerCount > 0 || enableOnlineBots ? 'bg-green-500 text-black hover:bg-green-400 shadow-[0_0_20px_rgba(34,197,94,0.4)]' : 'bg-white/10 text-white/20 cursor-not-allowed'}`}
-                                          >
-                                              START GAME
-                                          </button>
-                                      </div>
-                                  )}
-                              </div>
-                           )}
-
-                           {/* Join Setup Screen */}
-                           {lobbyState === 'join_setup' && (
-                               <div className="flex flex-col h-full">
-                                  <div className="flex items-center justify-between mb-6 shrink-0">
-                                     <button onClick={() => setLobbyState('main')} className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-colors">
-                                        <ArrowRight size={16} className="rotate-180" />
-                                     </button>
-                                     <span className="text-white/40 text-xs font-bold uppercase tracking-widest">Join Room</span>
-                                     <div className="w-8" />
-                                  </div>
-
-                                  <div className="flex-1 flex flex-col justify-center items-center text-center gap-6">
-                                      <div>
-                                          <div className="w-16 h-16 md:w-20 md:h-20 bg-emerald-600/20 rounded-full mx-auto mb-4 flex items-center justify-center border border-emerald-500/50 text-emerald-400 animate-pulse">
-                                              <Wifi size={28} />
-                                          </div>
-                                          <p className="text-white/60 text-sm">Enter the Room Code provided by the host</p>
-                                      </div>
-
-                                      <div className="relative w-full">
-                                          <input 
-                                            value={joinInput}
-                                            onChange={(e) => setJoinInput(e.target.value)}
-                                            className="w-full bg-black/30 border-2 border-white/10 focus:border-emerald-500 rounded-xl p-4 pr-12 text-center text-white font-mono font-black text-3xl tracking-widest uppercase outline-none transition-all placeholder:text-white/5 placeholder:tracking-normal placeholder:text-xl"
-                                            placeholder="CODE"
-                                            maxLength={6}
-                                          />
-                                          <button 
-                                              onClick={async () => {
-                                                  try {
-                                                      const text = await navigator.clipboard.readText();
-                                                      setJoinInput(text);
-                                                  } catch(e) {}
-                                              }}
-                                              className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-white/30 hover:text-white transition-colors"
-                                              title="Paste"
-                                          >
-                                              <Clipboard size={20} />
-                                          </button>
-                                      </div>
-
-                                      <button 
-                                        onClick={joinGame}
-                                        disabled={!joinInput || isConnecting}
-                                        className={`w-full py-4 rounded-xl font-black text-lg transition-all flex items-center justify-center gap-2 ${joinInput && !isConnecting ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg' : 'bg-white/10 text-white/20 cursor-not-allowed'}`}
-                                      >
-                                          {isConnecting ? <Loader2 size={24} className="animate-spin" /> : 'JOIN LOBBY'}
-                                      </button>
-                                  </div>
-                               </div>
-                           )}
-
-                           {/* Waiting Screen */}
-                           {lobbyState === 'client_waiting' && (
-                               <div className="flex flex-col h-full items-center justify-center text-center gap-6">
-                                   <div className="w-20 h-20 md:w-24 md:h-24 bg-gradient-to-br from-green-400 to-emerald-600 rounded-full flex items-center justify-center shadow-[0_0_40px_rgba(34,197,94,0.5)] animate-bounce">
-                                      <Check size={40} className="text-white drop-shadow-md" strokeWidth={4} />
-                                   </div>
-                                   <div>
-                                        <h2 className="text-2xl md:text-3xl font-black text-white mb-2 tracking-tight">YOU'RE IN!</h2>
-                                        <p className="text-emerald-200 font-medium">Waiting for host to start...</p>
-                                   </div>
-                                   
-                                   <div className="bg-white/5 rounded-xl p-4 w-full border border-white/5">
-                                       <p className="text-white/30 text-[10px] font-bold uppercase tracking-widest mb-1">Connected to Room</p>
-                                       <p className="text-3xl font-mono font-black text-white tracking-widest uppercase">{roomCode}</p>
-                                       {hostRoomName && <p className="text-sm text-emerald-400 font-bold mt-1">{hostRoomName}</p>}
-                                   </div>
-                               </div>
-                           )}
+                                </div>
+                            )}
 
                         </div>
-                     )}
+                    </div>
 
-                  </div>
-               </div>
+                    {/* Footer Links */}
+                    <div className="mt-8 flex items-center gap-4 opacity-60 hover:opacity-100 transition-opacity shrink-0">
+                        <a href="mailto:nibirbbkr@gmail.com" className="text-white/60 hover:text-white text-xs font-bold uppercase tracking-widest flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center"><Mail size={14} /></div>
+                            Contact
+                        </a>
+                        <div className="w-1 h-1 bg-white/20 rounded-full"></div>
+                        <button onClick={handleInstallClick} className="text-white/60 hover:text-white text-xs font-bold uppercase tracking-widest flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center"><Download size={14} /></div>
+                            Install
+                        </button>
+                    </div>
 
-               {/* Footer Links */}
-               <div className="mt-8 flex items-center gap-4 opacity-60 hover:opacity-100 transition-opacity shrink-0">
-                   <a href="mailto:nibirbbkr@gmail.com" className="text-white/60 hover:text-white text-xs font-bold uppercase tracking-widest flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center"><Mail size={14} /></div>
-                      Contact
-                   </a>
-                   <div className="w-1 h-1 bg-white/20 rounded-full"></div>
-                   <button onClick={handleInstallClick} className="text-white/60 hover:text-white text-xs font-bold uppercase tracking-widest flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center"><Download size={14} /></div>
-                      Install
-                   </button>
-               </div>
+                    <div className="mt-6 text-white/20 text-[10px] font-bold tracking-[0.2em] uppercase shrink-0">
+                        © 2025 Nibir. All rights reserved.
+                    </div>
 
-               <div className="mt-6 text-white/20 text-[10px] font-bold tracking-[0.2em] uppercase shrink-0">
-                  © 2025 Nibir. All rights reserved.
-               </div>
-
+                </div>
             </div>
           </div>
       );
