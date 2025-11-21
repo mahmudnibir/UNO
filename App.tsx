@@ -12,7 +12,7 @@ import GameTable from './components/GameTable';
 import PlayerHand from './components/PlayerHand';
 import ColorPicker from './components/ColorPicker';
 import CardView from './components/CardView';
-import { Volume2, VolumeX, Play, Users, Trophy, Zap, User, Copy, Wifi, WifiOff, ArrowRight, Check, Loader2, X, Trash2, Edit3, Shuffle, Download } from 'lucide-react';
+import { Volume2, VolumeX, Play, Users, Trophy, Zap, User, Copy, Wifi, WifiOff, ArrowRight, Check, Loader2, X, Trash2, Edit3, Shuffle, Download, HelpCircle, Share } from 'lucide-react';
 
 const INITIAL_HAND_SIZE = 7;
 
@@ -39,6 +39,7 @@ const App: React.FC = () => {
   // PWA State
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [showIOSHelp, setShowIOSHelp] = useState(false);
   
   // Settings
   const [botCount, setBotCount] = useState<number>(3);
@@ -72,7 +73,19 @@ const App: React.FC = () => {
   }, []);
 
   const handleInstallClick = async () => {
-      if (!deferredPrompt) return;
+      // iOS Detection
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+      
+      if (isIOS) {
+          setShowIOSHelp(true);
+          return;
+      }
+
+      if (!deferredPrompt) {
+          // Fallback if prompt isn't ready (common in some desktop browsers)
+          alert("To install, check your browser's address bar for the Install icon.");
+          return;
+      }
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
       if (outcome === 'accepted') {
@@ -597,11 +610,26 @@ const App: React.FC = () => {
                             PLAY OFFLINE <ArrowRight size={24} />
                         </button>
                         
-                        {deferredPrompt && (
-                            <button onClick={handleInstallClick} className="w-full mt-4 py-3 bg-white/10 hover:bg-white/20 rounded-xl font-bold text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2 text-white/60 hover:text-white">
-                                <Download size={18} /> Install App
+                        {/* Install Button */}
+                        <div className="mt-4 flex flex-col gap-2">
+                            <button 
+                                onClick={handleInstallClick} 
+                                className="w-full py-3 bg-white/10 hover:bg-white/20 rounded-xl font-bold text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2 text-white/60 hover:text-white"
+                            >
+                                <Download size={18} /> {deferredPrompt ? "Install App" : "Install PWA"}
                             </button>
-                        )}
+                            {showIOSHelp && (
+                                <div className="bg-black/60 p-4 rounded-xl text-sm text-white/80 flex items-start gap-3 animate-pop">
+                                    <Share size={20} className="shrink-0 mt-1 text-blue-400" />
+                                    <div>
+                                        <p className="font-bold text-white mb-1">To Install on iOS:</p>
+                                        1. Tap the <span className="font-bold text-blue-400">Share</span> button below.<br/>
+                                        2. Scroll down and tap <span className="font-bold text-white">Add to Home Screen</span>.
+                                        <button onClick={() => setShowIOSHelp(false)} className="block mt-2 text-xs text-white/40 underline">Close</button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 ) : (
                    <div className="w-full bg-slate-900/50 backdrop-blur-md rounded-3xl p-6 border border-white/10 mb-6 animate-pop overflow-hidden relative min-h-[350px]">
