@@ -15,7 +15,7 @@ import CardView from './components/CardView';
 import { 
   Volume2, VolumeX, Play, Users, Trophy, Zap, User, Copy, Wifi, WifiOff, 
   ArrowRight, Check, Loader2, X, Trash2, Edit3, Shuffle, Download, 
-  HelpCircle, Share, Smartphone, Monitor, Menu, AlertTriangle, BookOpen, Mail, Siren
+  HelpCircle, Share, Smartphone, Monitor, Menu, AlertTriangle, BookOpen, Mail 
 } from 'lucide-react';
 
 const INITIAL_HAND_SIZE = 7;
@@ -225,9 +225,7 @@ const App: React.FC = () => {
         // Add connected friends
         // Logic: We have connectedPeerCount. We assign IDs 1..N to them.
         for (let i = 0; i < connectedPeerCount; i++) {
-             players.push({ id: i + 1, name: 
-               i === 0 ? 'Guest 1' : `Guest ${i + 1}`, // Simple naming 
-               hand: [], isBot: false, hasUno: false });
+             players.push({ id: i + 1, name: `Guest ${i + 1}`, hand: [], isBot: false, hasUno: false });
         }
         
         // Fill rest with bots ONLY if enabled or if not enough humans
@@ -478,109 +476,30 @@ const App: React.FC = () => {
     setGameState(prev => {
       if (!prev) return null;
       const player = prev.players[playerId];
-      
-      // Bot forgetting UNO chance
-      if (player.isBot && player.hand.length === 2 && !player.hasUno) {
-         // 50% chance to NOT shout UNO, making them vulnerable to challenge
+      if (player.hand.length === 2 && !player.hasUno) {
          if (Math.random() < 0.5) { 
-             // Silent pass
-         } else {
-             // Actually shout
-             // We handle shouting in state update below, but let's mark hasUno locally for logic
-             // Actually, handleShoutUno updates state. 
-             // To simplify, we just assume if they didn't call handleShoutUno before this, they missed it.
+             setLastAction("Forgot to shout UNO! +2 cards");
+             playSound('error');
          }
       }
 
-      // Remove card
-      const newHand = player.hand.filter(c => c.id !== card.id);
-      
       const newPlayers = prev.players.map(p => {
         if (p.id === playerId) {
-          return { ...p, hand: [...newHand] }; // Don't reset hasUno yet, we need to check it for winning condition
+          const newHand = p.hand.filter(c => c.id !== card.id);
+          return { ...p, hand: [...newHand], hasUno: false };
         }
         return p;
       });
-      
-      // WINNING CONDITION CHECK WITH PENALTY
-      if (newHand.length === 0) {
-        // Did they shout UNO?
-        if (!player.hasUno) {
-            // PENALTY!
-            playSound('error');
-            const penaltyDeck = [...prev.deck];
-            const penaltyDiscard = [...prev.discardPile, card]; // Card is played
-            
-            // Recycle if needed for penalty
-            if (penaltyDeck.length < 2) {
-                 // Simplified for brevity: just take what we can or push discard back
-                 // In real implementation, shuffle discard back.
-            }
-            
-            const p1 = penaltyDeck.shift();
-            const p2 = penaltyDeck.shift();
-            const penaltyCards = [p1, p2].filter(c => c !== undefined) as Card[];
-            
-            const penalizedPlayers = newPlayers.map(p => {
-                if (p.id === playerId) {
-                    return { ...p, hand: [...p.hand, ...penaltyCards], hasUno: false };
-                }
-                return p;
-            });
-            
-            let nextIndex = getNextPlayerIndex(prev.currentPlayerIndex, prev.players.length, prev.direction);
-            let nextDirection = prev.direction;
-            
-            // Logic for the played card still applies (e.g. Reverse/Skip)
-            // But usually if you are penalized, play passes? 
-            // Standard rules: Card takes effect, then you draw 2, then play passes.
-            
-             if (card.value === CardValue.Reverse) {
-                nextDirection = (nextDirection * -1) as 1 | -1;
-                if (prev.players.length === 2) nextIndex = getNextPlayerIndex(nextIndex, prev.players.length, nextDirection);
-             } else if (card.value === CardValue.Skip) {
-                nextIndex = getNextPlayerIndex(nextIndex, prev.players.length, nextDirection);
-             } else if (card.value === CardValue.DrawTwo || card.value === CardValue.WildDrawFour) {
-                 // If you win with a draw 2, next player draws.
-                 // But here you failed to win.
-                 // Let's apply simple logic: Card Effect happens, THEN you get penalty cards in hand.
-             }
 
-            const penaltyState = {
-                ...prev,
-                deck: penaltyDeck,
-                discardPile: penaltyDiscard,
-                players: penalizedPlayers,
-                currentPlayerIndex: nextIndex,
-                direction: nextDirection,
-                activeColor: wildColor || card.color, // Update color
-                isUnoShouted: false
-            };
-             
-            setLastAction(`${player.name} forgot UNO! +2 Cards`);
-            if (networkMode === NetworkMode.Host) mpManager.broadcast({ type: 'GAME_STATE', payload: { ...penaltyState, lastActivePlayerId: playerId } });
-            return penaltyState;
-        }
-
-        // NORMAL WIN
+      if (newPlayers[playerId].hand.length === 0) {
         playSound('win');
         const winState = { ...prev, players: newPlayers, discardPile: [...prev.discardPile, card], status: GameStatus.GameOver, winner: prev.players[playerId] };
         if (networkMode === NetworkMode.Host) mpManager.broadcast({ type: 'GAME_STATE', payload: { ...winState, lastActivePlayerId: playerId } });
         return winState;
       }
 
-      // Normal Play (Not winning move)
-      // Now we reset hasUno for the player since they played a card
-      const playersWithResetUno = newPlayers.map(p => p.id === playerId ? { ...p, hasUno: false } : p);
-      
-      if (newHand.length === 1 && player.hasUno) {
-          // Keep hasUno true if they have 1 card and already shouted
-          playersWithResetUno[playerId].hasUno = true;
-      }
-
-      if (newHand.length === 1 && !player.hasUno) {
-           // They have 1 card left but haven't shouted. They are vulnerable to challenge until next player moves.
-           // Sound alert maybe?
+      if (newPlayers[playerId].hand.length === 1) {
+           playSound('uno');
       }
 
       let nextDirection = prev.direction;
@@ -615,13 +534,13 @@ const App: React.FC = () => {
 
       if (stackToAdd > 0) {
           nextState = {
-              ...prev, discardPile: [...prev.discardPile, card], players: playersWithResetUno, 
+              ...prev, discardPile: [...prev.discardPile, card], players: newPlayers, 
               currentPlayerIndex: nextIndex, direction: nextDirection, activeColor: nextActiveColor, drawStack: prev.drawStack + stackToAdd
           };
       } else {
           if (skipNext) nextIndex = getNextPlayerIndex(nextIndex, prev.players.length, nextDirection);
           nextState = {
-             ...prev, discardPile: [...prev.discardPile, card], players: playersWithResetUno,
+             ...prev, discardPile: [...prev.discardPile, card], players: newPlayers,
              currentPlayerIndex: nextIndex, direction: nextDirection, activeColor: nextActiveColor
           };
       }
@@ -629,52 +548,6 @@ const App: React.FC = () => {
       if (networkMode === NetworkMode.Host) mpManager.broadcast({ type: 'GAME_STATE', payload: { ...nextState, lastActivePlayerId: playerId } });
       return nextState;
     });
-  };
-
-  // --- Challenge Logic ---
-  const handleChallengeUno = () => {
-     // Find any opponent who has 1 card and !hasUno
-     if (!gameState) return;
-     
-     // If Client, send request
-     if (networkMode === NetworkMode.Client) {
-         // We don't have a specific protocol for challenge, simpler to just let client logic handle visual button
-         // But actually, Host needs to execute.
-         // Since we lack a generic "ACTION" type, let's use SHOUT_UNO with a special payload or just execute logic if local
-         // For now, only Host/Offline supports robust challenge logic since modifying protocols requires deeper changes.
-         // Wait, standard Offline/Host logic:
-         // We need to identify WHO to challenge.
-     }
-
-     const targetPlayer = gameState.players.find(p => p.id !== myPlayerId && p.hand.length === 1 && !p.hasUno);
-     
-     if (targetPlayer) {
-         // Penalty!
-         playSound('error');
-         setGameState(prev => {
-            if (!prev) return null;
-            
-            // Draw 2 for target
-             const newDeck = [...prev.deck];
-             const p1 = newDeck.shift();
-             const p2 = newDeck.shift();
-             const cards = [p1, p2].filter(c => !!c) as Card[];
-             
-             const newPlayers = prev.players.map(p => 
-                 p.id === targetPlayer.id ? { ...p, hand: [...p.hand, ...cards] } : p
-             );
-
-             const newState = {
-                 ...prev,
-                 deck: newDeck,
-                 players: newPlayers
-             };
-             
-             setLastAction(`${targetPlayer.name} CAUGHT! +2 Cards`);
-             if (networkMode === NetworkMode.Host) mpManager.broadcast({ type: 'GAME_STATE', payload: { ...newState, lastActivePlayerId: myPlayerId } });
-             return newState;
-         });
-     }
   };
 
   const hasValidMove = (() => {
@@ -689,11 +562,6 @@ const App: React.FC = () => {
   const mustDraw = gameState 
     ? (gameState.currentPlayerIndex === myPlayerId && (!hasValidMove || gameState.drawStack > 0))
     : false;
-
-  // Check if there is a vulnerable player to challenge
-  const canChallenge = gameState 
-      ? gameState.players.some(p => p.id !== myPlayerId && p.hand.length === 1 && !p.hasUno)
-      : false;
 
   // --- Modal Handlers ---
   const triggerExitConfirm = () => {
@@ -1110,16 +978,6 @@ const App: React.FC = () => {
         </div>
         
         <div className="flex items-center gap-3 pointer-events-auto">
-             {/* Challenge Button (Only visible if applicable) */}
-             {canChallenge && (
-                 <button 
-                    onClick={handleChallengeUno}
-                    className="bg-red-600 text-white px-4 py-2 rounded-full font-black flex items-center gap-2 hover:scale-110 transition-transform animate-pulse shadow-[0_0_20px_rgba(220,38,38,0.6)] border border-red-400"
-                 >
-                     <Siren size={20} className="animate-wiggle" /> CATCH UNO!
-                 </button>
-             )}
-
              {/* Help / Rules Button */}
              <button 
                 onClick={() => setShowRules(true)}
@@ -1270,10 +1128,6 @@ const App: React.FC = () => {
                              <li className="flex gap-3">
                                  <div className="w-1.5 h-1.5 rounded-full bg-white/20 mt-2.5 shrink-0" />
                                  <span>Play moves clockwise until a Reverse card is played.</span>
-                             </li>
-                             <li className="flex gap-3">
-                                 <div className="w-1.5 h-1.5 rounded-full bg-red-500/50 mt-2.5 shrink-0" />
-                                 <span><strong className="text-red-400">Penalty:</strong> If you finish without saying UNO, you will be caught and draw 2 cards!</span>
                              </li>
                          </ul>
                      </section>

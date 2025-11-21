@@ -1,9 +1,8 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React from 'react';
 import { Card, CardColor } from '../types';
 import CardView from './CardView';
 import { Megaphone } from 'lucide-react';
-import { soundManager } from '../utils/sound';
 
 interface PlayerHandProps {
   hand: Card[];
@@ -15,146 +14,6 @@ interface PlayerHandProps {
   hasShoutedUno: boolean;
   mustDraw: boolean;
 }
-
-// --- Draggable Card Component ---
-interface DraggableCardProps {
-  card: Card;
-  index: number;
-  total: number;
-  canPlay: boolean;
-  onPlay: () => void;
-  style: React.CSSProperties;
-}
-
-const DraggableCard: React.FC<DraggableCardProps> = ({ card, index, total, canPlay, onPlay, style }) => {
-  const [isDragging, setIsDragging] = useState(false);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  const ref = useRef<HTMLDivElement>(null);
-  
-  // Drag Ref to store initial offset
-  const dragOffset = useRef({ x: 0, y: 0 });
-
-  const handleStart = (clientX: number, clientY: number) => {
-    if (!canPlay) return;
-    setIsDragging(true);
-    setPosition({ x: clientX, y: clientY });
-    dragOffset.current = { x: 0, y: 0 }; // Center anchoring usually feels better for cards
-    soundManager.play('draw'); // Small feedback
-  };
-
-  const handleMove = (clientX: number, clientY: number) => {
-    if (!isDragging) return;
-    setPosition({ x: clientX, y: clientY });
-  };
-
-  const handleEnd = () => {
-    if (!isDragging) return;
-    setIsDragging(false);
-
-    // Drop Zone Logic: If dropped in the upper 60% of the screen
-    const dropThreshold = window.innerHeight * 0.65;
-    
-    if (position.y < dropThreshold) {
-      onPlay();
-    } else {
-      soundManager.play('whoosh'); // Return sound
-    }
-  };
-
-  // Mouse Events
-  const onMouseDown = (e: React.MouseEvent) => {
-    // Prevent default to stop text selection
-    e.preventDefault(); 
-    handleStart(e.clientX, e.clientY);
-  };
-
-  // Touch Events
-  const onTouchStart = (e: React.TouchEvent) => {
-    // e.preventDefault(); // Don't prevent default here or scroll might break, checking browser behavior
-    const touch = e.touches[0];
-    handleStart(touch.clientX, touch.clientY);
-  };
-
-  useEffect(() => {
-    const onMouseMove = (e: MouseEvent) => handleMove(e.clientX, e.clientY);
-    const onMouseUp = () => handleEnd();
-    
-    const onTouchMove = (e: TouchEvent) => {
-        const touch = e.touches[0];
-        handleMove(touch.clientX, touch.clientY);
-    };
-    const onTouchEnd = () => handleEnd();
-
-    if (isDragging) {
-      window.addEventListener('mousemove', onMouseMove);
-      window.addEventListener('mouseup', onMouseUp);
-      window.addEventListener('touchmove', onTouchMove, { passive: false });
-      window.addEventListener('touchend', onTouchEnd);
-    }
-
-    return () => {
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
-      window.removeEventListener('touchmove', onTouchMove);
-      window.removeEventListener('touchend', onTouchEnd);
-    };
-  }, [isDragging]);
-
-  // If dragging, render a Portal-like fixed element (high z-index)
-  // We keep the original element as a placeholder (opacity 0) to maintain layout
-  
-  return (
-    <>
-      <div 
-        ref={ref}
-        className="absolute origin-bottom transition-transform duration-300 ease-out group select-none"
-        style={{ 
-            ...style, 
-            zIndex: isDragging ? -1 : index, // Hide behind if dragging (using placeholder logic)
-            opacity: isDragging ? 0 : 1
-        }}
-        onMouseDown={onMouseDown}
-        onTouchStart={onTouchStart}
-      >
-        <div className={`transition-transform duration-200 ${canPlay ? 'hover:-translate-y-10 hover:scale-110 cursor-grab active:cursor-grabbing' : ''}`}>
-            <CardView 
-                card={card} 
-                size="xl" 
-                playable={canPlay}
-                // Disable click if we are relying on drag, but keep click for accessibility/quick play
-                onClick={canPlay ? onPlay : undefined}
-                hoverEffect={true}
-                className={`
-                    shadow-2xl 
-                    ${canPlay 
-                        ? 'brightness-110 hover:shadow-[0_0_40px_rgba(255,255,255,0.5)]' 
-                        : 'grayscale-[0.5] opacity-100 brightness-90'
-                    }
-                `}
-            />
-        </div>
-        {canPlay && (
-            <div className="absolute -top-10 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-white text-black text-xs font-bold px-3 py-1 rounded-full shadow-lg pointer-events-none whitespace-nowrap z-50">
-                Drag to Play
-            </div>
-        )}
-      </div>
-
-      {isDragging && (
-        <div 
-            className="fixed z-[1000] pointer-events-none"
-            style={{ 
-                left: position.x, 
-                top: position.y,
-                transform: 'translate(-50%, -50%) scale(1.2) rotate(5deg)', // Slightly larger and tilted while dragging
-            }}
-        >
-            <CardView card={card} size="xl" playable={true} className="shadow-[0_20px_50px_rgba(0,0,0,0.5)]" />
-        </div>
-      )}
-    </>
-  );
-};
 
 const PlayerHand: React.FC<PlayerHandProps> = ({ 
   hand, 
@@ -169,7 +28,7 @@ const PlayerHand: React.FC<PlayerHandProps> = ({
   
   const isPlayable = (card: Card) => {
     if (!isCurrentTurn) return false;
-    if (mustDraw) return false;
+    if (mustDraw) return false; // Disable all cards if penalty is active
     if (card.color === CardColor.Wild) return true;
     if (card.color === activeColor) return true;
     if (card.value === discardTop.value) return true;
@@ -208,38 +67,72 @@ const PlayerHand: React.FC<PlayerHandProps> = ({
            const canPlay = isPlayable(card);
            const total = sortedHand.length;
            
+           // Calculate Position: Spread evenly from left to right relative to center
+           // Center index is (total - 1) / 2
            const centerIndex = (total - 1) / 2;
            const offsetFromCenter = index - centerIndex;
            
+           // Spread factor: How far apart cards are in pixels. 
            const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
            
-           const maxSpread = isMobile ? 40 : 80;
+           // Increased maxSpread to allow cards to sit side-by-side if space exists
+           const maxSpread = isMobile ? 40 : 80; // Slightly tighter for smaller cards
            const minSpread = isMobile ? 25 : 40;
            
+           // Dynamically squeeze if hand is large
            const availableWidth = typeof window !== 'undefined' ? window.innerWidth - 40 : 1000;
            const idealWidth = total * maxSpread;
            
+           // Only squeeze if we exceed available width
            const spread = idealWidth > availableWidth 
              ? Math.max(availableWidth / total, minSpread) 
              : maxSpread;
            
+           // X Translation
            const xPos = offsetFromCenter * spread;
+           
+           // Rotation arc (slight fan)
            const rotation = offsetFromCenter * (isMobile ? 1.5 : 2); 
+
+           // Y Translation (arc effect - center cards higher)
            const yPos = Math.abs(offsetFromCenter) * (isMobile ? 2 : 4);
 
            return (
-             <DraggableCard 
-                key={card.id}
-                card={card}
-                index={index}
-                total={total}
-                canPlay={canPlay}
-                onPlay={() => onPlayCard(card)}
-                style={{ 
-                    transform: `translateX(${xPos}px) translateY(${yPos}px) rotate(${rotation}deg)`,
-                    bottom: 0
-                }}
-             />
+             <div 
+               key={card.id}
+               className="absolute transition-all duration-300 ease-out hover:z-[100] origin-bottom group"
+               style={{ 
+                 transform: `translateX(${xPos}px) translateY(${yPos}px) rotate(${rotation}deg)`,
+                 zIndex: index,
+                 bottom: 0, // Anchor to bottom of container
+               }}
+             >
+                <div className={`transition-transform duration-200 ${canPlay ? 'hover:-translate-y-10 hover:scale-110 cursor-pointer' : ''}`}>
+                    <CardView 
+                    card={card} 
+                    size="xl" 
+                    playable={canPlay}
+                    // We do NOT set disabled={true} here because CardView's disabled prop adds internal styles we might not want.
+                    // Instead we control everything via className below.
+                    onClick={() => canPlay && onPlayCard(card)}
+                    hoverEffect={true}
+                    className={`
+                        shadow-2xl 
+                        ${canPlay 
+                            ? 'brightness-110 hover:shadow-[0_0_40px_rgba(255,255,255,0.5)]' 
+                            : 'grayscale-[0.5] opacity-100 brightness-90' // Updated: Solid opacity, slight dim
+                        }
+                    `}
+                    />
+                </div>
+                
+                {/* Hover Info / Selection Indicator */}
+                {canPlay && (
+                    <div className="absolute -top-10 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-white text-black text-xs font-bold px-3 py-1 rounded-full shadow-lg pointer-events-none whitespace-nowrap z-50">
+                        Play
+                    </div>
+                )}
+             </div>
            );
          })}
          </div>
