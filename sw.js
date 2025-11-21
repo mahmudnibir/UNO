@@ -17,7 +17,7 @@ const STATIC_ASSETS = [
   './App.tsx'
 ];
 
-// Install Event: Cache core local files immediately
+// Install Event
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
@@ -27,7 +27,7 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Activate Event: Clean up old caches
+// Activate Event
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
@@ -42,7 +42,7 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch Event: Network First for API/Peers, Cache First for Assets/Libs
+// Fetch Event
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
@@ -76,7 +76,10 @@ self.addEventListener('fetch', (event) => {
           return networkResponse;
         })
         .catch(() => {
-          // C. Offline Fallback
+          // C. Offline Fallback for Main Page
+           if (event.request.mode === 'navigate') {
+                return caches.match('./index.html');
+           }
         });
     })
   );

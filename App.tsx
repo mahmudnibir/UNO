@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Card, CardColor, CardValue, Player, GameState, GameStatus, NetworkMode, NetworkMessage 
@@ -12,7 +11,7 @@ import GameTable from './components/GameTable';
 import PlayerHand from './components/PlayerHand';
 import ColorPicker from './components/ColorPicker';
 import CardView from './components/CardView';
-import { Volume2, VolumeX, Play, Users, Trophy, Zap, User, Copy, Wifi, WifiOff, ArrowRight, Check, Loader2, X, Trash2, Edit3, Shuffle, Download, HelpCircle, Share, Smartphone, Monitor } from 'lucide-react';
+import { Volume2, VolumeX, Play, Users, Trophy, Zap, User, Copy, Wifi, WifiOff, ArrowRight, Check, Loader2, X, Trash2, Edit3, Shuffle, Download, HelpCircle, Share, Smartphone, Monitor, Menu } from 'lucide-react';
 
 const INITIAL_HAND_SIZE = 7;
 
@@ -78,22 +77,21 @@ const App: React.FC = () => {
   }, []);
 
   const handleInstallClick = async () => {
-      if (isIOS) {
-          setShowInstallHelp(true);
+      // If the browser captured the event, try to trigger it
+      if (deferredPrompt) {
+          deferredPrompt.prompt();
+          const { outcome } = await deferredPrompt.userChoice;
+          if (outcome === 'accepted') {
+              setDeferredPrompt(null);
+          } else {
+              // User dismissed, show manual help just in case
+              setShowInstallHelp(true);
+          }
           return;
       }
-
-      if (!deferredPrompt) {
-          // Fallback if prompt isn't ready (common in some desktop browsers or if already installed)
-          setShowInstallHelp(true);
-          return;
-      }
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === 'accepted') {
-          setDeferredPrompt(null);
-          setShowInstallHelp(false);
-      }
+      
+      // Otherwise, show the manual help
+      setShowInstallHelp(true);
   };
 
   // Initialize Multiplayer Listeners
@@ -557,7 +555,7 @@ const App: React.FC = () => {
 
             {/* PWA Install Help Modal - Fixed Bottom Right */}
             {showInstallHelp && (
-                <div className="fixed bottom-4 right-4 max-w-xs md:max-w-sm bg-slate-900/95 backdrop-blur-xl p-6 rounded-2xl border border-yellow-400/30 shadow-[0_0_30px_rgba(0,0,0,0.5)] z-[100] animate-pop">
+                <div className="fixed bottom-4 right-4 max-w-xs md:max-w-md bg-slate-900/95 backdrop-blur-xl p-6 rounded-2xl border border-yellow-400/30 shadow-[0_0_50px_rgba(0,0,0,0.8)] z-[100] animate-pop">
                     <button 
                         onClick={() => setShowInstallHelp(false)} 
                         className="absolute top-2 right-2 text-white/40 hover:text-white bg-white/5 hover:bg-white/20 rounded-full p-1 transition-colors"
@@ -565,13 +563,13 @@ const App: React.FC = () => {
                         <X size={16}/>
                     </button>
                     
-                    <h3 className="font-black text-yellow-400 mb-3 flex items-center gap-2 uppercase tracking-wide">
-                        <Download size={20}/> Install App
+                    <h3 className="font-black text-yellow-400 mb-4 flex items-center gap-2 uppercase tracking-wide">
+                        <Download size={20}/> How to Install
                     </h3>
                     
                     {isIOS ? (
-                        <div className="text-sm text-slate-300 space-y-3">
-                            <p>To install on iOS, follow these steps:</p>
+                        <div className="text-sm text-slate-300 space-y-4">
+                            <p>To install on iOS/iPad, follow these steps:</p>
                             <div className="flex items-center gap-3 bg-white/5 p-3 rounded-lg">
                                 <Share className="text-blue-400 shrink-0" size={24} />
                                 <span>1. Tap the <strong>Share</strong> button in your browser menu.</span>
@@ -582,20 +580,26 @@ const App: React.FC = () => {
                             </div>
                         </div>
                     ) : (
-                        <div className="text-sm text-slate-300 space-y-3">
-                           <p>App installation is managed by your browser.</p>
+                        <div className="text-sm text-slate-300 space-y-4">
+                           <p className="leading-relaxed">If you don't see the install icon in the address bar, follow these manual steps:</p>
+                           
                            <div className="bg-white/5 p-3 rounded-lg flex gap-3 items-start">
-                                <Monitor className="text-indigo-400 shrink-0 mt-0.5" size={20} />
+                                <div className="shrink-0 mt-0.5 bg-white/10 p-1 rounded">
+                                    <Menu className="text-white" size={16} />
+                                </div>
                                 <div>
-                                    <strong className="text-white block mb-1">Desktop:</strong>
-                                    Look for an <span className="inline-block border border-white/30 rounded px-1 mx-1 text-[10px]">Install</span> icon in the address bar (top right).
+                                    <strong className="text-white block mb-1">Chrome / Edge (Desktop):</strong>
+                                    Click the <strong className="text-white">Three Dots (⋮)</strong> in the top right corner &rarr; <strong>Save and Share</strong> &rarr; <strong>Install UNO Master</strong>.
                                 </div>
                            </div>
-                            <div className="bg-white/5 p-3 rounded-lg flex gap-3 items-start">
-                                <Smartphone className="text-green-400 shrink-0 mt-0.5" size={20} />
+
+                           <div className="bg-white/5 p-3 rounded-lg flex gap-3 items-start">
+                                <div className="shrink-0 mt-0.5 bg-white/10 p-1 rounded">
+                                    <Smartphone className="text-green-400" size={16} />
+                                </div>
                                 <div>
-                                    <strong className="text-white block mb-1">Android:</strong>
-                                    Tap the menu (⋮) and select <strong>"Install App"</strong> or <strong>"Add to Home Screen"</strong>.
+                                    <strong className="text-white block mb-1">Android (Chrome):</strong>
+                                    Tap the <strong className="text-white">Three Dots (⋮)</strong> &rarr; <strong>Add to Home Screen</strong> or <strong>Install App</strong>.
                                 </div>
                            </div>
                         </div>
