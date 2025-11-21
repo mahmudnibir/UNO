@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Card, CardColor, CardValue, Player, GameState, GameStatus, NetworkMode, NetworkMessage 
@@ -37,6 +38,7 @@ const App: React.FC = () => {
   
   // PWA State
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
   
   // Settings
   const [botCount, setBotCount] = useState<number>(3);
@@ -55,7 +57,18 @@ const App: React.FC = () => {
           setDeferredPrompt(e);
       };
       window.addEventListener('beforeinstallprompt', handler);
-      return () => window.removeEventListener('beforeinstallprompt', handler);
+      
+      // Offline Status Listener
+      const handleOnline = () => setIsOffline(false);
+      const handleOffline = () => setIsOffline(true);
+      window.addEventListener('online', handleOnline);
+      window.addEventListener('offline', handleOffline);
+
+      return () => {
+          window.removeEventListener('beforeinstallprompt', handler);
+          window.removeEventListener('online', handleOnline);
+          window.removeEventListener('offline', handleOffline);
+      };
   }, []);
 
   const handleInstallClick = async () => {
@@ -533,6 +546,14 @@ const App: React.FC = () => {
                     </div>
                 </div>
 
+                {/* Offline Indicator */}
+                {isOffline && (
+                    <div className="bg-orange-500/20 border border-orange-500/50 px-3 py-1 rounded-full mb-4 flex items-center gap-2">
+                        <WifiOff size={14} className="text-orange-400" />
+                        <span className="text-orange-300 text-xs font-bold uppercase">Offline Mode</span>
+                    </div>
+                )}
+
                 {/* Kick Message Notification */}
                 {kickMessage && (
                     <div className="w-full bg-red-500/20 border border-red-500 text-red-200 px-4 py-3 rounded-xl mb-6 flex items-center gap-2 animate-pulse">
@@ -548,8 +569,9 @@ const App: React.FC = () => {
                         Single Player
                     </button>
                     <button 
-                        onClick={() => { setNetworkMode(NetworkMode.Host); setLobbyState('main'); }} 
-                        className={`flex-1 py-3 rounded-2xl font-bold text-sm uppercase tracking-wider transition-all ${networkMode !== NetworkMode.Offline ? 'bg-white text-black shadow-lg' : 'text-white/50 hover:text-white hover:bg-white/5'}`}
+                        onClick={() => { if (!isOffline) { setNetworkMode(NetworkMode.Host); setLobbyState('main'); } }} 
+                        disabled={isOffline}
+                        className={`flex-1 py-3 rounded-2xl font-bold text-sm uppercase tracking-wider transition-all ${networkMode !== NetworkMode.Offline ? 'bg-white text-black shadow-lg' : 'text-white/50 hover:text-white hover:bg-white/5'} ${isOffline ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                         Multiplayer
                     </button>
@@ -752,48 +774,67 @@ const App: React.FC = () => {
                                
                                <p className="text-white/60 font-medium mb-8">Waiting for host to start...</p>
                                
-                               <div className="bg-white/5 rounded-xl p-6 border border-white/10 text-center w-full max-w-xs relative overflow-hidden">
-                                   <p className="text-xs font-bold text-white/40 uppercase tracking-widest mb-2">ROOM CODE</p>
-                                   <div className="text-4xl font-mono font-bold text-yellow-400 tracking-widest relative z-10">{roomCode}</div>
-                                   <div className="absolute inset-0 bg-white/5 animate-pulse pointer-events-none" />
+                               <div className="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-lg">
+                                   <span className="text-xs font-bold text-white/40 uppercase">Room Code</span>
+                                   <span className="font-mono font-bold text-white">{roomCode}</span>
                                </div>
-                               
-                               <div className="mt-8 flex items-center gap-2 text-white/40 text-sm font-mono">
-                                    <Loader2 className="animate-spin" size={16} /> SYNCING WITH HOST...
-                               </div>
-                               
-                               <button onClick={() => { mpManager.disconnect(); setLobbyState('join_setup'); setNetworkMode(NetworkMode.Offline); }} className="mt-8 text-white/30 hover:text-white text-sm font-bold uppercase tracking-wider transition-colors">
-                                   Cancel & Leave
-                               </button>
                            </div>
                        )}
-
                    </div>
                 )}
-                
-                <div className="text-white/30 text-xs font-mono">v2.3 • Multiplayer Beta</div>
+
+                <div className="text-center text-white/20 text-[10px] font-bold tracking-widest uppercase">
+                  © 2024 UNO Master
+                </div>
             </div>
           </div>
       );
   }
 
   return (
-    <div className="h-full w-full overflow-hidden relative flex flex-col bg-[#0f172a]">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(30,41,59,1)_0%,_rgba(15,23,42,1)_100%)]"></div>
-      
-      <div className="absolute top-4 left-4 right-4 z-50 flex justify-between items-start">
-         <button onClick={() => { mpManager.disconnect(); setGameState(null); setLobbyState('main'); setNetworkMode(NetworkMode.Offline); }} className="glass-panel px-4 py-2 rounded-full text-sm font-bold hover:bg-red-500/50 transition-colors">EXIT</button>
-         
-         <div className="flex gap-2 md:gap-4">
-             {networkMode !== NetworkMode.Client && (
-                 <button onClick={startGame} className="glass-panel p-2 rounded-full hover:bg-white/20 hover:rotate-180 transition-all duration-500" title="Shuffle New Game">
-                    <Shuffle size={20} />
+    <div className="w-full h-full relative overflow-hidden">
+      <div className="absolute top-0 left-0 right-0 z-50 p-4 flex justify-between items-start pointer-events-none">
+        <div className="pointer-events-auto flex gap-2">
+            <button 
+                onClick={() => {
+                    if (window.confirm("Are you sure you want to exit?")) {
+                        setGameState(null);
+                        setLobbyState('main');
+                        if (networkMode === NetworkMode.Host || networkMode === NetworkMode.Client) {
+                             mpManager.disconnect();
+                             setNetworkMode(NetworkMode.Offline);
+                        }
+                    }
+                }}
+                className="bg-slate-800/80 text-white px-6 py-2 rounded-full font-bold hover:bg-red-600 hover:shadow-[0_0_15px_rgba(220,38,38,0.5)] transition-all border border-white/10 backdrop-blur-md"
+            >
+                EXIT
+            </button>
+        </div>
+        
+        <div className="flex items-center gap-3 pointer-events-auto">
+             {/* Shuffle/New Game Button - Only for Host or Offline */}
+             {(networkMode === NetworkMode.Offline || networkMode === NetworkMode.Host) && (
+                 <button 
+                    onClick={() => {
+                         if (window.confirm("Restart game?")) {
+                             startGame();
+                         }
+                    }}
+                    className="w-10 h-10 bg-slate-800/80 rounded-full flex items-center justify-center hover:bg-blue-600 hover:rotate-180 transition-all duration-500 border border-white/10 shadow-lg group"
+                    title="Shuffle / New Game"
+                 >
+                    <Shuffle size={20} className="text-white group-hover:text-white" />
                  </button>
              )}
-             <button onClick={() => setIsSoundEnabled(!isSoundEnabled)} className="glass-panel p-2 rounded-full hover:bg-white/20">
+
+             <button 
+                onClick={() => setIsSoundEnabled(!isSoundEnabled)}
+                className="w-10 h-10 bg-slate-800/80 rounded-full flex items-center justify-center hover:bg-white/20 transition-all border border-white/10 shadow-lg"
+            >
                 {isSoundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
-             </button>
-         </div>
+            </button>
+        </div>
       </div>
 
       <GameTable 
@@ -809,31 +850,35 @@ const App: React.FC = () => {
         onRestart={() => setGameState(null)}
         lastAction={lastAction}
         mustDraw={mustDraw}
-        roomId={gameState.roomId}
+        roomId={networkMode === NetworkMode.Host ? roomCode : undefined}
         myPlayerId={myPlayerId}
         lastActivePlayerId={lastActivePlayerId}
       />
-
+      
       <PlayerHand 
-        hand={gameState.players[myPlayerId]?.hand || []}
+        hand={gameState.players[myPlayerId].hand}
         isCurrentTurn={gameState.currentPlayerIndex === myPlayerId}
         activeColor={gameState.activeColor}
         discardTop={gameState.discardPile[gameState.discardPile.length - 1]}
         onPlayCard={handlePlayerCardClick}
-        onShoutUno={() => handleShoutUno()}
-        hasShoutedUno={gameState.players[myPlayerId]?.hasUno || false}
+        onShoutUno={handleShoutUno}
+        hasShoutedUno={gameState.players[myPlayerId].hasUno}
         mustDraw={mustDraw}
       />
 
-      {gameState.drawStack > 0 && (
-          <div className="absolute top-[65%] left-1/2 -translate-x-1/2 -translate-y-1/2 z-40 pointer-events-none">
-             <div className="bg-red-600 text-white font-black text-xl px-6 py-2 rounded-full shadow-xl animate-bounce border-2 border-white">
-                PENALTY: +{gameState.drawStack}
-             </div>
+      {showColorPicker && (
+        <ColorPicker onSelect={handleColorSelect} />
+      )}
+      
+      {gameState.isUnoShouted && (
+          <div className="fixed inset-0 z-50 pointer-events-none flex items-center justify-center">
+              <div className="animate-pop scale-150">
+                   <div className="bg-red-600 text-white font-black text-6xl px-8 py-4 rounded-3xl border-8 border-white shadow-2xl rotate-[-12deg] animate-bounce">
+                       UNO!
+                   </div>
+              </div>
           </div>
       )}
-
-      {showColorPicker && <ColorPicker onSelect={handleColorSelect} />}
     </div>
   );
 };
