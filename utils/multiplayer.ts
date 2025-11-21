@@ -9,9 +9,14 @@ class MultiplayerManager {
   private connections: any[] = [];
   private onDataReceived: DataCallback | null = null;
   private myId: string = '';
+  private roomName: string = 'UNO Room';
 
   initialize(onData: DataCallback) {
     this.onDataReceived = onData;
+  }
+
+  setRoomName(name: string) {
+    this.roomName = name;
   }
 
   async hostGame(): Promise<string> {
@@ -27,17 +32,28 @@ class MultiplayerManager {
 
       this.peer.on('connection', (conn) => {
         console.log('New client connected:', conn.peer);
-        this.connections.push(conn);
         
+        conn.on('open', () => {
+             this.connections.push(conn);
+             // Send Room Info immediately
+             conn.send({ type: 'ROOM_INFO', payload: { name: this.roomName } });
+             
+             // Inform app that someone joined (Update List)
+             if (this.onDataReceived) {
+                 this.onDataReceived({ type: 'PLAYER_JOINED', payload: { count: this.connections.length } }); 
+             }
+        });
+
         conn.on('data', (data: any) => {
             if (this.onDataReceived) this.onDataReceived(data);
         });
-
-        conn.on('open', () => {
-             // Inform app that someone joined
-             if (this.onDataReceived) {
-                 this.onDataReceived({ type: 'PLAYER_JOINED', playerId: this.connections.length }); // Simple ID assignment
-             }
+        
+        conn.on('close', () => {
+            // Remove closed connection
+            this.connections = this.connections.filter(c => c.peer !== conn.peer);
+            if (this.onDataReceived) {
+                 this.onDataReceived({ type: 'PLAYER_LEFT', payload: { count: this.connections.length } });
+            }
         });
       });
 
@@ -61,6 +77,15 @@ class MultiplayerManager {
 
         conn.on('data', (data: any) => {
             if (this.onDataReceived) this.onDataReceived(data);
+            
+            // Handle being kicked at the protocol level
+            if (data.type === 'KICKED') {
+                this.disconnect();
+            }
+        });
+        
+        conn.on('close', () => {
+             if (this.onDataReceived) this.onDataReceived({ type: 'KICKED' }); // Generic disconnect signal
         });
 
         conn.on('error', (err) => reject(err));
@@ -68,6 +93,25 @@ class MultiplayerManager {
 
       this.peer.on('error', (err) => reject(err));
     });
+  }
+
+  kickClient(index: number) {
+      const conn = this.connections[index];
+      if (conn) {
+          // Send polite notice
+          conn.send({ type: 'KICKED' });
+          
+          // Close after short delay to ensure message sends
+          setTimeout(() => {
+              conn.close();
+          }, 100);
+          
+          // Update local list immediately
+          this.connections.splice(index, 1);
+          if (this.onDataReceived) {
+              this.onDataReceived({ type: 'PLAYER_LEFT', payload: { count: this.connections.length } });
+          }
+      }
   }
 
   broadcast(msg: NetworkMessage) {

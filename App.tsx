@@ -12,7 +12,7 @@ import GameTable from './components/GameTable';
 import PlayerHand from './components/PlayerHand';
 import ColorPicker from './components/ColorPicker';
 import CardView from './components/CardView';
-import { Volume2, VolumeX, Play, Users, Trophy, Zap, User, Copy, Wifi, WifiOff, ArrowRight, Check, Loader2 } from 'lucide-react';
+import { Volume2, VolumeX, Play, Users, Trophy, Zap, User, Copy, Wifi, WifiOff, ArrowRight, Check, Loader2, X, Trash2, Edit3 } from 'lucide-react';
 
 const INITIAL_HAND_SIZE = 7;
 
@@ -27,11 +27,14 @@ const App: React.FC = () => {
   // Multiplayer State
   const [networkMode, setNetworkMode] = useState<NetworkMode>(NetworkMode.Offline);
   const [roomCode, setRoomCode] = useState<string>("");
+  const [roomName, setRoomName] = useState<string>("My UNO Room");
+  const [hostRoomName, setHostRoomName] = useState<string>(""); // What client sees
   const [joinInput, setJoinInput] = useState<string>("");
-  const [connectedPeers, setConnectedPeers] = useState<number>(0);
+  const [connectedPeerCount, setConnectedPeerCount] = useState<number>(0);
   const [isConnecting, setIsConnecting] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
   const [lobbyState, setLobbyState] = useState<'main' | 'host_setup' | 'join_setup' | 'client_waiting'>('main');
+  const [kickMessage, setKickMessage] = useState<string | null>(null);
   
   // Settings
   const [botCount, setBotCount] = useState<number>(3);
@@ -52,36 +55,28 @@ const App: React.FC = () => {
         if (data.type === 'GAME_STATE') {
           setGameState(data.payload);
           if (data.payload.lastAction) setLastAction(data.payload.lastAction);
-          // We need to try and deduce who played from the state change, or the server should send it.
-          // For now, relies on the server state updates logic below implicitly.
-          // Improvement: Payload should ideally carry 'who played'.
-          // But since we sync exact state, let's just update local lastActivePlayerId if provided in payload (need to add it to GameState ideally, or just local state)
-          // Actually, let's just use the payload's lastActivePlayerId if we add it to the GameState type, OR handle explicit event messages.
-          // The PLAY_CARD / DRAW_CARD messages are Client -> Host. 
-          // The GAME_STATE is Host -> Client.
-          // Let's add `lastActivePlayerId` to GameState in types.ts? Or just derive it?
-          // Easier: The Host logic updates `lastActivePlayerId` state locally, but Client needs it too.
-          // Hack: We will piggyback it on `lastAction` logic or add a field to GameState.
-          // Since I can't change types.ts easily without breaking other files potentially, I'll rely on the fact that 
-          // the `gameState` object from Host *might* contain it if I added it to the object spread, even if TS complains.
-          // Better: Just infer it? No, hard to infer.
-          // Let's add it to the GameState interface in this file implicitly by casting or just updating logic to use `currentPlayerIndex` of PREVIOUS state? No.
-          
-          // Real solution: The client receives a new GameState. 
-          // We can infer who played by checking `gameState.discardPile` diff? 
-          // Or simplified: The `GameTable` animation depends on `lastActivePlayerId`. 
-          // If I don't sync this, animations on client won't work for other players.
-          // I will update the Host to include it in the payload object even if not strictly typed in the interface for now (JS allows it).
           if ((data.payload as any).lastActivePlayerId !== undefined) {
               setLastActivePlayerId((data.payload as any).lastActivePlayerId);
           }
           playSound('turn'); 
         }
+        if (data.type === 'ROOM_INFO') {
+            setHostRoomName(data.payload.name);
+        }
+        if (data.type === 'KICKED') {
+            setLobbyState('main');
+            setNetworkMode(NetworkMode.Offline);
+            setKickMessage("You were disconnected by the host.");
+            mpManager.disconnect();
+        }
       } else if (networkMode === NetworkMode.Host) {
         // --- Host Logic ---
         if (data.type === 'PLAYER_JOINED') {
-           setConnectedPeers(prev => prev + 1);
+           setConnectedPeerCount(data.payload.count);
            playSound('draw');
+        }
+        if (data.type === 'PLAYER_LEFT') {
+           setConnectedPeerCount(data.payload.count);
         }
         if (data.type === 'PLAY_CARD') {
            const { playerId, card, wildColor } = data.payload;
@@ -102,10 +97,11 @@ const App: React.FC = () => {
   const startHost = async () => {
       setIsConnecting(true);
       try {
+          mpManager.setRoomName(roomName);
           const id = await mpManager.hostGame();
           setRoomCode(id);
           setNetworkMode(NetworkMode.Host);
-          setConnectedPeers(0);
+          setConnectedPeerCount(0);
       } catch (e) {
           alert("Failed to host game. PeerJS server might be busy.");
           setNetworkMode(NetworkMode.Offline);
@@ -118,6 +114,7 @@ const App: React.FC = () => {
   const joinGame = async () => {
       if (!joinInput) return;
       setIsConnecting(true);
+      setKickMessage(null);
       try {
           await mpManager.joinGame(joinInput);
           setNetworkMode(NetworkMode.Client);
@@ -130,6 +127,10 @@ const App: React.FC = () => {
           setLobbyState('main');
       }
       setIsConnecting(false);
+  };
+
+  const handleKickPlayer = (index: number) => {
+      mpManager.kickClient(index);
   };
 
   const handleCopyCode = () => {
@@ -150,9 +151,10 @@ const App: React.FC = () => {
     players.push({ id: 0, name: networkMode === NetworkMode.Client ? 'Host' : 'You', hand: [], isBot: false, hasUno: false });
 
     if (networkMode === NetworkMode.Host) {
-        // Add connected friend(s) - currently just one supported strictly, but logic supports simpler IDs
-        if (connectedPeers > 0) {
-            players.push({ id: 1, name: 'Friend', hand: [], isBot: false, hasUno: false });
+        // Add connected friends
+        // Logic: We have connectedPeerCount. We assign IDs 1..N to them.
+        for (let i = 0; i < connectedPeerCount; i++) {
+             players.push({ id: i + 1, name: `Guest ${i + 1}`, hand: [], isBot: false, hasUno: false });
         }
         
         // Fill rest with bots ONLY if enabled or if not enough humans
@@ -499,6 +501,8 @@ const App: React.FC = () => {
             ))}
 
             <div className="relative z-10 flex flex-col items-center animate-pop max-w-lg w-full px-4">
+                
+                {/* Logo Section */}
                 <div className="relative mb-8 group cursor-default select-none">
                     <h1 className="text-[6rem] md:text-[9rem] font-black text-transparent bg-clip-text bg-gradient-to-b from-red-500 to-red-700 drop-shadow-[0_10px_10px_rgba(0,0,0,0.8)] leading-none transform -rotate-3">
                       UNO
@@ -507,6 +511,13 @@ const App: React.FC = () => {
                       MASTER
                     </div>
                 </div>
+
+                {/* Kick Message Notification */}
+                {kickMessage && (
+                    <div className="w-full bg-red-500/20 border border-red-500 text-red-200 px-4 py-3 rounded-xl mb-6 flex items-center gap-2 animate-pulse">
+                        <X size={20} /> {kickMessage}
+                    </div>
+                )}
 
                 <div className="w-full bg-slate-900/60 backdrop-blur-xl rounded-3xl p-1 border border-white/10 shadow-2xl flex mb-6">
                     <button 
@@ -539,13 +550,13 @@ const App: React.FC = () => {
                         </button>
                     </div>
                 ) : (
-                   <div className="w-full bg-slate-900/50 backdrop-blur-md rounded-3xl p-6 border border-white/10 mb-6 animate-pop overflow-hidden relative min-h-[300px]">
+                   <div className="w-full bg-slate-900/50 backdrop-blur-md rounded-3xl p-6 border border-white/10 mb-6 animate-pop overflow-hidden relative min-h-[350px]">
                        
                        {/* Mode Selection */}
                        {lobbyState === 'main' && (
                            <div className="flex flex-col gap-4 h-full justify-center pt-4">
                                <button 
-                                   onClick={() => { setLobbyState('host_setup'); startHost(); }}
+                                   onClick={() => { setLobbyState('host_setup'); }}
                                    className="group relative w-full h-24 bg-indigo-600 rounded-2xl flex items-center px-6 overflow-hidden hover:scale-105 transition-all shadow-lg border border-indigo-400/30"
                                >
                                    <div className="absolute right-0 bottom-0 opacity-20 transform translate-x-4 translate-y-4">
@@ -579,12 +590,32 @@ const App: React.FC = () => {
                                
                                <div className="flex-1 flex flex-col items-center justify-center mb-4">
                                     {!roomCode ? (
-                                        <div className="animate-pulse text-center">
-                                            <div className="w-12 h-12 border-4 border-t-yellow-400 border-white/10 rounded-full animate-spin mx-auto mb-4"/>
-                                            <p className="text-white/60 font-bold">Creating Room...</p>
+                                        <div className="w-full">
+                                            <p className="text-white/60 text-xs font-bold uppercase tracking-widest mb-2">Set Room Name</p>
+                                            <div className="relative mb-6">
+                                                <input 
+                                                    type="text"
+                                                    maxLength={15}
+                                                    value={roomName}
+                                                    onChange={(e) => setRoomName(e.target.value)}
+                                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white font-bold outline-none focus:border-indigo-500 transition-all"
+                                                    placeholder="My Room"
+                                                />
+                                                <Edit3 size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30" />
+                                            </div>
+                                            <button 
+                                                onClick={startHost}
+                                                className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-bold text-white shadow-lg transition-all flex items-center justify-center gap-2"
+                                            >
+                                                CREATE LOBBY
+                                            </button>
                                         </div>
                                     ) : (
                                         <div className="w-full text-center animate-pop">
+                                            <div className="flex items-center justify-center gap-2 mb-1">
+                                                 <h3 className="text-xl font-bold text-white">{roomName}</h3>
+                                                 <span className="bg-indigo-500 text-xs px-2 py-0.5 rounded font-bold">HOST</span>
+                                            </div>
                                             <p className="text-white/40 text-xs font-bold uppercase tracking-widest mb-2">Room Code</p>
                                             <div 
                                                 onClick={handleCopyCode}
@@ -597,21 +628,32 @@ const App: React.FC = () => {
                                                 {copiedId && <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-green-500 text-black text-xs font-bold px-2 py-1 rounded animate-bounce">COPIED!</div>}
                                             </div>
 
-                                            <div className="bg-white/5 rounded-xl p-4 mb-4">
+                                            <div className="bg-white/5 rounded-xl p-4 mb-4 text-left">
                                                 <div className="flex items-center justify-between mb-2">
                                                     <span className="text-white/60 text-sm font-bold">Connected Players</span>
-                                                    <span className="bg-blue-500/20 text-blue-300 text-xs font-bold px-2 py-0.5 rounded-full">{connectedPeers + 1}/4</span>
+                                                    <span className="bg-blue-500/20 text-blue-300 text-xs font-bold px-2 py-0.5 rounded-full">{connectedPeerCount + 1}/4</span>
                                                 </div>
                                                 <div className="space-y-2">
-                                                    <div className="flex items-center gap-2 text-white font-medium text-sm">
+                                                    <div className="flex items-center gap-2 text-white font-medium text-sm bg-white/5 p-2 rounded-lg">
                                                         <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" /> You (Host)
                                                     </div>
-                                                    {connectedPeers > 0 ? (
-                                                        <div className="flex items-center gap-2 text-blue-300 font-medium text-sm animate-pop">
-                                                            <div className="w-2 h-2 bg-blue-400 rounded-full" /> Player 2 (Friend)
-                                                        </div>
+                                                    {connectedPeerCount > 0 ? (
+                                                        Array.from({ length: connectedPeerCount }).map((_, idx) => (
+                                                            <div key={idx} className="flex items-center justify-between bg-white/5 p-2 rounded-lg animate-pop group">
+                                                                <div className="flex items-center gap-2 text-blue-300 font-medium text-sm">
+                                                                    <div className="w-2 h-2 bg-blue-400 rounded-full" /> Guest {idx + 1}
+                                                                </div>
+                                                                <button 
+                                                                    onClick={() => handleKickPlayer(idx)}
+                                                                    className="text-red-400 opacity-0 group-hover:opacity-100 hover:text-red-200 hover:bg-red-500/20 p-1 rounded transition-all"
+                                                                    title="Kick Player"
+                                                                >
+                                                                    <X size={14} />
+                                                                </button>
+                                                            </div>
+                                                        ))
                                                     ) : (
-                                                        <div className="text-white/20 text-sm italic pl-4">Waiting for friend...</div>
+                                                        <div className="text-white/20 text-sm italic pl-4 py-2">Waiting for guests...</div>
                                                     )}
                                                 </div>
                                             </div>
@@ -628,8 +670,8 @@ const App: React.FC = () => {
 
                                             <button 
                                                 onClick={startGame} 
-                                                disabled={connectedPeers === 0 && !enableOnlineBots}
-                                                className={`w-full py-4 rounded-xl font-black text-xl transition-all flex items-center justify-center gap-2 ${connectedPeers > 0 || enableOnlineBots ? 'bg-gradient-to-r from-green-600 to-emerald-600 shadow-lg hover:scale-105 text-white' : 'bg-white/10 text-white/30 cursor-not-allowed'}`}
+                                                disabled={connectedPeerCount === 0 && !enableOnlineBots}
+                                                className={`w-full py-4 rounded-xl font-black text-xl transition-all flex items-center justify-center gap-2 ${connectedPeerCount > 0 || enableOnlineBots ? 'bg-gradient-to-r from-green-600 to-emerald-600 shadow-lg hover:scale-105 text-white' : 'bg-white/10 text-white/30 cursor-not-allowed'}`}
                                             >
                                                 START GAME
                                             </button>
@@ -678,6 +720,9 @@ const App: React.FC = () => {
                                    <Check size={40} className="text-black" strokeWidth={4} />
                                </div>
                                <h2 className="text-3xl font-black text-white mb-2 tracking-wide">CONNECTED!</h2>
+                               
+                               {hostRoomName && <div className="text-xl font-bold text-yellow-400 mb-1">{hostRoomName}</div>}
+                               
                                <p className="text-white/60 font-medium mb-8">Waiting for host to start...</p>
                                
                                <div className="bg-white/5 rounded-xl p-6 border border-white/10 text-center w-full max-w-xs relative overflow-hidden">
@@ -699,7 +744,7 @@ const App: React.FC = () => {
                    </div>
                 )}
                 
-                <div className="text-white/30 text-xs font-mono">v2.1 • Multiplayer Beta</div>
+                <div className="text-white/30 text-xs font-mono">v2.2 • Multiplayer Beta</div>
             </div>
           </div>
       );
