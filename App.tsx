@@ -15,7 +15,7 @@ import CardView from './components/CardView';
 import { 
   Volume2, VolumeX, Play, Users, Trophy, Zap, User, Copy, Wifi, WifiOff, 
   ArrowRight, Check, Loader2, X, Trash2, Edit3, Shuffle, Download, 
-  HelpCircle, Share, Smartphone, Monitor, Menu, AlertTriangle, BookOpen, Mail 
+  HelpCircle, Share, Smartphone, Monitor, Menu, AlertTriangle, BookOpen, Mail, Clipboard 
 } from 'lucide-react';
 
 const INITIAL_HAND_SIZE = 7;
@@ -187,9 +187,9 @@ const App: React.FC = () => {
       setIsConnecting(true);
       setKickMessage(null);
       try {
-          await mpManager.joinGame(joinInput);
+          await mpManager.joinGame(joinInput.trim()); // Trim to remove accidental spaces
           setNetworkMode(NetworkMode.Client);
-          setRoomCode(joinInput);
+          setRoomCode(joinInput.trim());
           setLobbyState('client_waiting'); // Move to waiting screen
           playSound('play');
       } catch (e) {
@@ -208,6 +208,19 @@ const App: React.FC = () => {
       navigator.clipboard.writeText(roomCode);
       setCopiedId(true);
       setTimeout(() => setCopiedId(false), 2000);
+  };
+
+  const handleShareCode = async () => {
+      if (navigator.share) {
+          try {
+              await navigator.share({
+                  title: 'Join my UNO Master Game!',
+                  text: `Join my UNO room with code: ${roomCode}`,
+              });
+          } catch (err) { console.log('Share failed', err); }
+      } else {
+          handleCopyCode();
+      }
   };
 
   // --- Game Initialization ---
@@ -826,13 +839,22 @@ const App: React.FC = () => {
                                       </div>
                                   ) : (
                                       <div className="flex-1 flex flex-col">
-                                          <div className="bg-black/40 rounded-xl p-4 border border-white/10 mb-6 relative group cursor-pointer" onClick={handleCopyCode}>
-                                              <div className="text-center">
+                                          <div className="bg-black/40 rounded-xl p-4 border border-white/10 mb-6 relative group cursor-pointer flex flex-col items-center justify-center gap-2" onClick={handleCopyCode}>
+                                              <div className="text-center w-full">
                                                   <p className="text-white/40 text-[10px] font-bold uppercase tracking-widest mb-1">Room Code</p>
-                                                  <p className="text-3xl font-mono font-bold text-yellow-400 tracking-widest">{roomCode}</p>
+                                                  <p className="text-xl md:text-3xl font-mono font-bold text-yellow-400 tracking-widest break-all px-2">{roomCode}</p>
                                               </div>
-                                              {copiedId && <div className="absolute inset-0 bg-green-500/90 flex items-center justify-center rounded-xl animate-in fade-in duration-200"><span className="font-black text-black">COPIED!</span></div>}
-                                              <div className="absolute inset-0 border-2 border-dashed border-white/10 group-hover:border-yellow-400/50 rounded-xl transition-colors pointer-events-none"></div>
+                                              <div className="flex gap-2 mt-2 relative z-20">
+                                                   <button onClick={(e) => { e.stopPropagation(); handleCopyCode(); }} className="flex items-center gap-1 bg-white/10 hover:bg-white/20 px-3 py-1 rounded-full text-xs font-bold text-white transition-colors">
+                                                      <Copy size={12} /> Copy
+                                                   </button>
+                                                   {navigator.share && (
+                                                       <button onClick={(e) => { e.stopPropagation(); handleShareCode(); }} className="flex items-center gap-1 bg-indigo-500/20 hover:bg-indigo-500/40 px-3 py-1 rounded-full text-xs font-bold text-indigo-300 transition-colors">
+                                                          <Share size={12} /> Share
+                                                       </button>
+                                                   )}
+                                              </div>
+                                              {copiedId && <div className="absolute inset-0 bg-green-500/90 flex items-center justify-center rounded-xl animate-in fade-in duration-200 z-30"><span className="font-black text-black">COPIED!</span></div>}
                                           </div>
 
                                           <div className="flex-1 bg-white/5 rounded-xl p-4 mb-4 overflow-y-auto custom-scrollbar">
@@ -898,16 +920,30 @@ const App: React.FC = () => {
                                           <div className="w-20 h-20 bg-emerald-600/20 rounded-full mx-auto mb-4 flex items-center justify-center border border-emerald-500/50 text-emerald-400 animate-pulse">
                                               <Wifi size={32} />
                                           </div>
-                                          <p className="text-white/60 text-sm">Enter the 6-character code from the host</p>
+                                          <p className="text-white/60 text-sm">Enter the Room Code provided by the host</p>
                                       </div>
 
-                                      <input 
-                                        value={joinInput}
-                                        onChange={(e) => setJoinInput(e.target.value)}
-                                        className="w-full bg-black/30 border-2 border-white/10 focus:border-emerald-500 rounded-xl p-5 text-center text-white font-mono font-bold text-3xl outline-none transition-all mb-8 placeholder:text-white/5 uppercase tracking-widest"
-                                        placeholder="CODE"
-                                        maxLength={10}
-                                      />
+                                      <div className="relative w-full mb-8">
+                                          <input 
+                                            value={joinInput}
+                                            onChange={(e) => setJoinInput(e.target.value)}
+                                            className="w-full bg-black/30 border-2 border-white/10 focus:border-emerald-500 rounded-xl p-4 pr-12 text-center text-white font-mono font-bold text-lg md:text-2xl outline-none transition-all placeholder:text-white/5"
+                                            placeholder="Paste Room Code"
+                                            maxLength={60}
+                                          />
+                                          <button 
+                                              onClick={async () => {
+                                                  try {
+                                                      const text = await navigator.clipboard.readText();
+                                                      setJoinInput(text);
+                                                  } catch(e) {}
+                                              }}
+                                              className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-white/30 hover:text-white transition-colors"
+                                              title="Paste"
+                                          >
+                                              <Clipboard size={20} />
+                                          </button>
+                                      </div>
 
                                       <button 
                                         onClick={joinGame}
@@ -931,7 +967,7 @@ const App: React.FC = () => {
                                    
                                    <div className="bg-white/5 rounded-xl p-4 w-full border border-white/5">
                                        <p className="text-white/30 text-[10px] font-bold uppercase tracking-widest mb-1">Connected to Room</p>
-                                       <p className="text-xl font-mono font-bold text-white">{roomCode}</p>
+                                       <p className="text-lg font-mono font-bold text-white break-all">{roomCode}</p>
                                        {hostRoomName && <p className="text-sm text-emerald-400 font-bold mt-1">{hostRoomName}</p>}
                                    </div>
                                </div>
