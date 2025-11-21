@@ -15,7 +15,7 @@ import CardView from './components/CardView';
 import { 
   Volume2, VolumeX, Play, Users, Trophy, Zap, User, Copy, Wifi, WifiOff, 
   ArrowRight, Check, Loader2, X, Trash2, Edit3, Shuffle, Download, 
-  HelpCircle, Share, Smartphone, Monitor, Menu, AlertTriangle, BookOpen 
+  HelpCircle, Share, Smartphone, Monitor, Menu, AlertTriangle, BookOpen, Mail 
 } from 'lucide-react';
 
 const INITIAL_HAND_SIZE = 7;
@@ -605,7 +605,9 @@ const App: React.FC = () => {
 
       return (
           <div className="h-full w-full flex items-center justify-center bg-[#0f172a] relative overflow-hidden">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(30,41,59,1)_0%,_rgba(15,23,42,1)_100%)]"></div>
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(51,65,85,0.4)_0%,_rgba(15,23,42,1)_100%)]"></div>
+            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5"></div>
+            
             {lobbyCards.map((c) => (
                <div key={c.id} className="absolute animate-float blur-sm opacity-60"
                  style={{ left: c.x, top: c.y, '--rot': `${c.rot}deg` } as any}>
@@ -667,10 +669,10 @@ const App: React.FC = () => {
                 </div>
             )}
 
-            <div className="relative z-10 flex flex-col items-center animate-pop max-w-lg w-full px-4">
+            <div className="relative z-10 flex flex-col items-center animate-pop max-w-lg w-full px-4 py-8 h-full md:h-auto justify-center overflow-y-auto custom-scrollbar">
                 
                 {/* Logo Section */}
-                <div className="relative mb-8 group cursor-default select-none">
+                <div className="relative mb-10 group cursor-default select-none transform hover:scale-105 transition-transform duration-500">
                     <h1 className="text-[6rem] md:text-[9rem] font-black text-transparent bg-clip-text bg-gradient-to-b from-red-500 to-red-700 drop-shadow-[0_10px_10px_rgba(0,0,0,0.8)] leading-none transform -rotate-3">
                       UNO
                     </h1>
@@ -920,8 +922,21 @@ const App: React.FC = () => {
                    </div>
                 )}
 
-                <div className="text-center text-white/20 text-[10px] font-bold tracking-widest uppercase">
-                  © 2024 UNO Master
+                {/* NEW FOOTER SECTION */}
+                <div className="mt-8 flex flex-col items-center gap-4 w-full border-t border-white/5 pt-6">
+                    <a 
+                        href="mailto:nibirbbkr@gmail.com"
+                        className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-slate-800 to-slate-900 rounded-full border border-white/10 hover:border-white/30 text-white/60 hover:text-white transition-all hover:-translate-y-1 shadow-lg group"
+                    >
+                        <Mail size={16} className="text-blue-400 group-hover:animate-wiggle" />
+                        <span className="text-xs font-bold uppercase tracking-widest">Contact Me</span>
+                    </a>
+                    
+                    <div className="text-center">
+                        <p className="text-white/20 text-[10px] font-bold tracking-[0.2em] uppercase">
+                            © 2025 Nibir. All rights reserved.
+                        </p>
+                    </div>
                 </div>
             </div>
           </div>
