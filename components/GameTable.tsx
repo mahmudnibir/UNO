@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import CardView from './CardView';
 import { Card, CardColor, Player, GameStatus } from '../types';
-import { Bot, Trophy, RotateCw, User } from 'lucide-react';
+import { Bot, Trophy, RotateCw, User, Copy, Check } from 'lucide-react';
 import { soundManager } from '../utils/sound';
 
 interface GameTableProps {
@@ -18,6 +18,7 @@ interface GameTableProps {
   onRestart: () => void;
   lastAction: string;
   mustDraw: boolean;
+  roomId?: string;
 }
 
 interface FlyingCardState {
@@ -40,11 +41,13 @@ const GameTable: React.FC<GameTableProps> = ({
   winner,
   onRestart,
   lastAction,
-  mustDraw
+  mustDraw,
+  roomId
 }) => {
   
   const [flyingCard, setFlyingCard] = useState<FlyingCardState | null>(null);
   const [visualDiscard, setVisualDiscard] = useState<Card>(discardTop);
+  const [copiedId, setCopiedId] = useState(false);
 
   useEffect(() => {
     if (discardTop.id !== visualDiscard.id) {
@@ -54,28 +57,16 @@ const GameTable: React.FC<GameTableProps> = ({
       let startX = w / 2;
       let startY = h + 100; 
       let rot = 0;
-
-      // Heuristic for positions based on player count
-      // Simplified: If it was You, bottom. If not you, top area random or based on index.
-      // Since names can be 'Friend' or 'Host', we can't just check static names easily.
-      
-      // Logic: Find the player who made the move (currentPlayer moved to next index already, 
-      // so we need reverse logic or pass specific prop. 
-      // Hack: use lastAction text match)
       
       const sideBotY = h * 0.15; 
 
       if (lastAction.includes("You") || lastAction.includes("Host")) { 
-         // Assuming local player or host at bottom 
          if (lastAction.includes("Host") && players[0].name !== 'Host') { 
-             // If I am client, Host is Top/Opponent
              startX = w / 2; startY = h * 0.02 + 30; rot = 180;
          } else {
-             // Me
              startX = w / 2; startY = h - 100; rot = 0;
          }
-      } else if (lastAction.includes("Friend") || lastAction.includes("Player 2")) {
-         // Typically Opponent
+      } else if (lastAction.includes("Friend") || lastAction.includes("Player")) {
          startX = w / 2; startY = h * 0.02 + 30; rot = 180; 
       } else if (lastAction.includes("Sarah")) { 
          startX = w * 0.05 + 30; startY = sideBotY + 30; rot = 90; 
@@ -110,6 +101,14 @@ const GameTable: React.FC<GameTableProps> = ({
       case CardColor.Yellow: return 'from-yellow-900/40 via-slate-950 to-black';
       default: return 'from-slate-900 via-slate-950 to-black';
     }
+  };
+
+  const handleCopyId = () => {
+      if (roomId) {
+          navigator.clipboard.writeText(roomId);
+          setCopiedId(true);
+          setTimeout(() => setCopiedId(false), 2000);
+      }
   };
 
   const BotAvatar: React.FC<{ player: Player, index: number, position: 'top' | 'left' | 'right' }> = ({ player, index, position }) => {
@@ -156,7 +155,6 @@ const GameTable: React.FC<GameTableProps> = ({
   };
 
   if (status === GameStatus.GameOver && winner) {
-      const isHumanWinner = winner.id === 0 || (winner.name === 'Friend' && false); // Adjust for multiplayer POV later
       return (
           <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center overflow-hidden">
              <div className="absolute inset-0 bg-slate-900/95 backdrop-blur-xl z-0"></div>
@@ -174,15 +172,10 @@ const GameTable: React.FC<GameTableProps> = ({
       );
   }
 
-  // --- Position Logic ---
   const renderBots = () => {
-      // Logic to map player ID to position based on MyID (0)
-      // In multiplayer, we might need relative mapping if we want 'Me' always at bottom.
-      // Current simplistic logic: Player 0 is bottom. 
       const totalPlayers = players.length;
       const bots = [];
 
-      // Assuming Player 0 is ALWAYS 'Me' in the local array view
       for (let i = 1; i < totalPlayers; i++) {
           let pos: 'top' | 'left' | 'right' = 'top';
           if (totalPlayers === 2) pos = 'top';
@@ -202,6 +195,21 @@ const GameTable: React.FC<GameTableProps> = ({
   return (
     <div className={`relative w-full h-full bg-gradient-to-br ${getAmbientGlow()} transition-colors duration-1000 overflow-hidden`}>
       <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/felt.png')] pointer-events-none"></div>
+      
+      {/* Room ID Overlay */}
+      {roomId && (
+         <div className="absolute top-4 left-20 z-50">
+             <div 
+                onClick={handleCopyId}
+                className="glass-panel px-4 py-2 rounded-full flex items-center gap-2 cursor-pointer hover:bg-white/10 active:scale-95 transition-all group"
+             >
+                {copiedId ? <Check size={16} className="text-green-400" /> : <Copy size={16} className="text-white/60 group-hover:text-white" />}
+                <span className="text-xs font-mono text-white/80 group-hover:text-white">ROOM: {roomId}</span>
+                {copiedId && <span className="text-xs font-bold text-green-400 ml-1 animate-pulse">Copied!</span>}
+             </div>
+         </div>
+      )}
+
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[60%] w-full flex flex-col items-center z-40">
          <div className="absolute -top-24 h-8 pointer-events-none">
             <span className="px-4 py-1 bg-black/40 backdrop-blur-md rounded-full border border-white/10 text-white/80 text-sm font-medium shadow-lg whitespace-nowrap">{lastAction}</span>
