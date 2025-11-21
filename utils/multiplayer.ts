@@ -14,6 +14,21 @@ const generateShortId = () => {
   return result;
 };
 
+// Configuration for STUN servers to navigate firewalls/NATs (NAT Traversal)
+const PEER_CONFIG: any = {
+  debug: 2, // 1: Errors, 2: Warnings, 3: All
+  config: {
+    iceServers: [
+      // Google's public STUN servers are highly reliable for free NAT traversal
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun3.l.google.com:19302' },
+      { urls: 'stun:stun4.l.google.com:19302' },
+    ],
+  },
+};
+
 class MultiplayerManager {
   private peer: Peer | null = null;
   private connections: any[] = [];
@@ -44,8 +59,8 @@ class MultiplayerManager {
         }
 
         const id = generateShortId();
-        // Create peer with specific short ID
-        const tempPeer = new Peer(id);
+        // Create peer with specific short ID AND config
+        const tempPeer = new Peer(id, PEER_CONFIG);
 
         const onError = (err: any) => {
           if (err.type === 'unavailable-id') {
@@ -114,8 +129,8 @@ class MultiplayerManager {
     return new Promise((resolve, reject) => {
       let isConnected = false;
       
-      // 1. Create Client Peer
-      this.peer = new Peer();
+      // 1. Create Client Peer with Config
+      this.peer = new Peer(PEER_CONFIG);
 
       // 2. Set safety timeout (10 seconds)
       const timeoutId = setTimeout(() => {
