@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'uno-master-v4';
+const CACHE_NAME = 'uno-master-v5';
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -14,7 +14,11 @@ const STATIC_ASSETS = [
   './components/GameTable.tsx',
   './components/PlayerHand.tsx',
   './components/ColorPicker.tsx',
-  './App.tsx'
+  './App.tsx',
+  // Cache External Assets for Offline Support
+  'https://cdn.tailwindcss.com',
+  'https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;900&display=swap',
+  'https://unpkg.com/@babel/standalone/babel.min.js'
 ];
 
 // Install Event
