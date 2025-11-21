@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Card, CardColor, CardValue, Player, GameState, GameStatus, NetworkMode, NetworkMessage 
@@ -23,6 +24,9 @@ const App: React.FC = () => {
   const [lastAction, setLastAction] = useState<string>("Game Start");
   const [lastActivePlayerId, setLastActivePlayerId] = useState<number | null>(null);
   
+  // Ref to track latest state inside closures/callbacks
+  const gameStateRef = useRef<GameState | null>(null);
+
   // Multiplayer State
   const [networkMode, setNetworkMode] = useState<NetworkMode>(NetworkMode.Offline);
   const [roomCode, setRoomCode] = useState<string>("");
@@ -44,6 +48,11 @@ const App: React.FC = () => {
   // Settings
   const [botCount, setBotCount] = useState<number>(3);
   const [enableOnlineBots, setEnableOnlineBots] = useState<boolean>(false);
+
+  // Keep Ref updated
+  useEffect(() => {
+      gameStateRef.current = gameState;
+  }, [gameState]);
 
   const playSound = (type: 'play' | 'draw' | 'uno' | 'win' | 'turn' | 'error' | 'shuffle') => {
     if (isSoundEnabled) {
@@ -139,7 +148,7 @@ const App: React.FC = () => {
         }
       }
     });
-  }, [networkMode]);
+  }, [networkMode, gameState]); // Re-bind when gameState changes to avoid stale closures, or rely on Ref
 
   // --- Hosting ---
   const startHost = async () => {
@@ -259,16 +268,6 @@ const App: React.FC = () => {
     if (networkMode === NetworkMode.Host) {
         mpManager.broadcast({ type: 'GAME_STATE', payload: { ...newGameState, lastActivePlayerId: null } });
     }
-  };
-
-  // --- Sync Helper ---
-  const updateGameState = (newState: GameState, activePlayerId?: number) => {
-      setGameState(newState);
-      if (activePlayerId !== undefined) setLastActivePlayerId(activePlayerId);
-      
-      if (networkMode === NetworkMode.Host) {
-          mpManager.broadcast({ type: 'GAME_STATE', payload: { ...newState, lastActivePlayerId: activePlayerId } });
-      }
   };
 
   // --- Bot AI Loop ---
@@ -395,8 +394,22 @@ const App: React.FC = () => {
       return newState;
     });
     
-    const name = gameState?.players[id]?.name || "Player";
-    setLastAction(`${name} shouted UNO!`);
+    const currentName = gameStateRef.current?.players[id]?.name || "Player";
+    setLastAction(`${currentName} shouted UNO!`);
+
+    // Auto-hide the visual popup after 2 seconds
+    setTimeout(() => {
+        setGameState(prev => {
+             if (!prev) return null;
+             if (!prev.isUnoShouted) return prev; // Already cleared
+             
+             const newState = { ...prev, isUnoShouted: false };
+             if (networkMode === NetworkMode.Host) {
+                 mpManager.broadcast({ type: 'GAME_STATE', payload: { ...newState, lastActivePlayerId: null } });
+             }
+             return newState;
+        });
+    }, 2000);
   };
 
   const handleDrawCard = (playerId: number) => {
