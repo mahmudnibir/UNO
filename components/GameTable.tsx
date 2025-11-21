@@ -19,6 +19,8 @@ interface GameTableProps {
   lastAction: string;
   mustDraw: boolean;
   roomId?: string;
+  myPlayerId: number;
+  lastActivePlayerId: number | null;
 }
 
 interface FlyingCardState {
@@ -42,38 +44,94 @@ const GameTable: React.FC<GameTableProps> = ({
   onRestart,
   lastAction,
   mustDraw,
-  roomId
+  roomId,
+  myPlayerId,
+  lastActivePlayerId
 }) => {
   
   const [flyingCard, setFlyingCard] = useState<FlyingCardState | null>(null);
   const [visualDiscard, setVisualDiscard] = useState<Card>(discardTop);
   const [copiedId, setCopiedId] = useState(false);
 
+  // Helper to determine visual position of any player index
+  const getPlayerPosition = (index: number): 'bottom' | 'top' | 'left' | 'right' => {
+    if (index === myPlayerId) return 'bottom';
+
+    const totalPlayers = players.length;
+    
+    // Calculate relative index from my perspective
+    // If I am 0: 1, 2, 3
+    // If I am 1: 2, 3, 0
+    // But specifically for the bots rendering logic we used in renderBots:
+    // In standard offline (I am 0):
+    // 2 players: 1 is Top
+    // 3 players: 1 Left, 2 Right
+    // 4 players: 1 Left, 2 Top, 3 Right
+    
+    // We need to match the layout logic exactly.
+    // Assuming myPlayerId is always the "Bottom" player visually.
+    
+    // Create a rotated array where myId is at index 0
+    // For animation, we just need to know where the avatar IS on screen.
+    // The renderBots function below hardcodes positions based on absolute index in the array relative to "me" being implicit 0 in offline, 
+    // or explicit logic.
+    
+    // Let's standardize based on the renderBots logic:
+    if (totalPlayers === 2) return 'top'; // The other player is always top
+    
+    if (totalPlayers === 3) {
+        // If I am 0: 1 is Left, 2 is Right
+        // If I am 1: logic in renderBots handles absolute indices.
+        // Let's look at renderBots logic again. It iterates 1..total.
+        if (index === (myPlayerId + 1) % totalPlayers) return 'left';
+        return 'right';
+    }
+
+    if (totalPlayers === 4) {
+        const diff = (index - myPlayerId + totalPlayers) % totalPlayers;
+        if (diff === 1) return 'left';
+        if (diff === 2) return 'top';
+        return 'right';
+    }
+
+    return 'top';
+  };
+
   useEffect(() => {
     if (discardTop.id !== visualDiscard.id) {
       soundManager.play('whoosh');
       const w = window.innerWidth;
       const h = window.innerHeight;
+      
       let startX = w / 2;
       let startY = h + 100; 
       let rot = 0;
-      
-      const sideBotY = h * 0.15; 
 
-      if (lastAction.includes("You") || lastAction.includes("Host")) { 
-         if (lastAction.includes("Host") && players[0].name !== 'Host') { 
-             startX = w / 2; startY = h * 0.02 + 30; rot = 180;
-         } else {
-             startX = w / 2; startY = h - 100; rot = 0;
-         }
-      } else if (lastAction.includes("Friend") || lastAction.includes("Player")) {
-         startX = w / 2; startY = h * 0.02 + 30; rot = 180; 
-      } else if (lastAction.includes("Sarah")) { 
-         startX = w * 0.05 + 30; startY = sideBotY + 30; rot = 90; 
-      } else if (lastAction.includes("Mike")) { 
-         startX = w / 2; startY = h * 0.02 + 30; rot = 180; 
-      } else if (lastAction.includes("Jess")) { 
-         startX = w * 0.95 - 30; startY = sideBotY + 30; rot = -90; 
+      // Use the explicit ID to find position
+      const originPos = lastActivePlayerId !== null ? getPlayerPosition(lastActivePlayerId) : 'bottom';
+      
+      // Coordinates matching the Avatar CSS positions
+      switch (originPos) {
+          case 'bottom':
+              startX = w / 2; 
+              startY = h - 50; 
+              rot = 0;
+              break;
+          case 'top':
+              startX = w / 2; 
+              startY = h * 0.02 + 40; // Matches top: 2%
+              rot = 180;
+              break;
+          case 'left':
+              startX = w * 0.05 + 40; // Matches left: 5%
+              startY = h * 0.15 + 40; // Matches top: 15%
+              rot = 90;
+              break;
+          case 'right':
+              startX = w * 0.95 - 40; // Matches right: 5%
+              startY = h * 0.15 + 40; // Matches top: 15%
+              rot = -90;
+              break;
       }
 
       setFlyingCard({
@@ -90,7 +148,7 @@ const GameTable: React.FC<GameTableProps> = ({
         soundManager.play('land'); 
       }, 700); 
     }
-  }, [discardTop.id, lastAction, visualDiscard.id]);
+  }, [discardTop.id, lastActivePlayerId, visualDiscard.id, myPlayerId, players.length]);
 
 
   const getAmbientGlow = () => {
@@ -176,18 +234,19 @@ const GameTable: React.FC<GameTableProps> = ({
       const totalPlayers = players.length;
       const bots = [];
 
-      for (let i = 1; i < totalPlayers; i++) {
-          let pos: 'top' | 'left' | 'right' = 'top';
-          if (totalPlayers === 2) pos = 'top';
-          else if (totalPlayers === 3) { if (i === 1) pos = 'left'; if (i === 2) pos = 'right'; } 
-          else { if (i === 1) pos = 'left'; if (i === 2) pos = 'top'; if (i === 3) pos = 'right'; }
+      // We need to iterate all players and render everyone EXCEPT myPlayerId
+      for (let i = 0; i < totalPlayers; i++) {
+          if (i === myPlayerId) continue;
+
+          const pos = getPlayerPosition(i);
+          if (pos === 'bottom') continue; // Should not happen based on check above, but safe guard
 
           let style: React.CSSProperties = {};
           if (pos === 'left') style = { left: '5%', top: '15%' };
           if (pos === 'right') style = { right: '5%', top: '15%' };
           if (pos === 'top') style = { top: '2%', left: '50%', transform: 'translateX(-50%)' };
 
-          bots.push(<div key={i} className="absolute" style={style}><BotAvatar player={players[i]} index={i} position={pos} /></div>);
+          bots.push(<div key={i} className="absolute" style={style}><BotAvatar player={players[i]} index={i} position={pos as any} /></div>);
       }
       return bots;
   };
@@ -219,7 +278,10 @@ const GameTable: React.FC<GameTableProps> = ({
              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 bg-slate-900 p-2 rounded-full"><RotateCw className="text-white/20 rotate-180" /></div>
          </div>
          <div className="flex gap-12 md:gap-16 items-center mt-4">
-            <div className={`relative group transition-transform duration-200 ${mustDraw ? 'scale-110 cursor-pointer' : ''}`} onClick={currentPlayerIndex === 0 ? onDrawCard : undefined}>
+            <div 
+                className={`relative group transition-transform duration-200 ${mustDraw ? 'scale-110 cursor-pointer' : ''}`} 
+                onClick={currentPlayerIndex === myPlayerId ? onDrawCard : undefined}
+            >
                <div className="absolute -top-2 -left-1 w-full h-full bg-slate-800 rounded-xl border border-slate-600" />
                <div className="absolute -top-1 -left-0.5 w-full h-full bg-slate-800 rounded-xl border border-slate-600" />
                <CardView size="lg" flipped className={`relative shadow-2xl ${mustDraw ? 'ring-4 ring-yellow-400 animate-pulse' : ''}`} />

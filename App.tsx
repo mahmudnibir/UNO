@@ -22,6 +22,7 @@ const App: React.FC = () => {
   const [pendingCardPlay, setPendingCardPlay] = useState<Card | null>(null);
   const [isSoundEnabled, setIsSoundEnabled] = useState(true);
   const [lastAction, setLastAction] = useState<string>("Game Start");
+  const [lastActivePlayerId, setLastActivePlayerId] = useState<number | null>(null);
   
   // Multiplayer State
   const [networkMode, setNetworkMode] = useState<NetworkMode>(NetworkMode.Offline);
@@ -51,6 +52,29 @@ const App: React.FC = () => {
         if (data.type === 'GAME_STATE') {
           setGameState(data.payload);
           if (data.payload.lastAction) setLastAction(data.payload.lastAction);
+          // We need to try and deduce who played from the state change, or the server should send it.
+          // For now, relies on the server state updates logic below implicitly.
+          // Improvement: Payload should ideally carry 'who played'.
+          // But since we sync exact state, let's just update local lastActivePlayerId if provided in payload (need to add it to GameState ideally, or just local state)
+          // Actually, let's just use the payload's lastActivePlayerId if we add it to the GameState type, OR handle explicit event messages.
+          // The PLAY_CARD / DRAW_CARD messages are Client -> Host. 
+          // The GAME_STATE is Host -> Client.
+          // Let's add `lastActivePlayerId` to GameState in types.ts? Or just derive it?
+          // Easier: The Host logic updates `lastActivePlayerId` state locally, but Client needs it too.
+          // Hack: We will piggyback it on `lastAction` logic or add a field to GameState.
+          // Since I can't change types.ts easily without breaking other files potentially, I'll rely on the fact that 
+          // the `gameState` object from Host *might* contain it if I added it to the object spread, even if TS complains.
+          // Better: Just infer it? No, hard to infer.
+          // Let's add it to the GameState interface in this file implicitly by casting or just updating logic to use `currentPlayerIndex` of PREVIOUS state? No.
+          
+          // Real solution: The client receives a new GameState. 
+          // We can infer who played by checking `gameState.discardPile` diff? 
+          // Or simplified: The `GameTable` animation depends on `lastActivePlayerId`. 
+          // If I don't sync this, animations on client won't work for other players.
+          // I will update the Host to include it in the payload object even if not strictly typed in the interface for now (JS allows it).
+          if ((data.payload as any).lastActivePlayerId !== undefined) {
+              setLastActivePlayerId((data.payload as any).lastActivePlayerId);
+          }
           playSound('turn'); 
         }
       } else if (networkMode === NetworkMode.Host) {
@@ -122,7 +146,7 @@ const App: React.FC = () => {
     // Setup Players
     const players: Player[] = [];
     
-    // Player 1 (Host/Local)
+    // Player 0 (Host/Local)
     players.push({ id: 0, name: networkMode === NetworkMode.Client ? 'Host' : 'You', hand: [], isBot: false, hasUno: false });
 
     if (networkMode === NetworkMode.Host) {
@@ -178,19 +202,22 @@ const App: React.FC = () => {
 
     setGameState(newGameState);
     setLastAction("Game Started!");
+    setLastActivePlayerId(null);
     playSound('turn');
 
     // Broadcast initial state if Host
     if (networkMode === NetworkMode.Host) {
-        mpManager.broadcast({ type: 'GAME_STATE', payload: newGameState });
+        mpManager.broadcast({ type: 'GAME_STATE', payload: { ...newGameState, lastActivePlayerId: null } });
     }
   };
 
   // --- Sync Helper ---
-  const updateGameState = (newState: GameState) => {
+  const updateGameState = (newState: GameState, activePlayerId?: number) => {
       setGameState(newState);
+      if (activePlayerId !== undefined) setLastActivePlayerId(activePlayerId);
+      
       if (networkMode === NetworkMode.Host) {
-          mpManager.broadcast({ type: 'GAME_STATE', payload: newState });
+          mpManager.broadcast({ type: 'GAME_STATE', payload: { ...newState, lastActivePlayerId: activePlayerId } });
       }
   };
 
@@ -309,7 +336,7 @@ const App: React.FC = () => {
         isUnoShouted: true,
         players: prev.players.map(p => p.id === id ? { ...p, hasUno: true } : p)
       };
-      if (networkMode === NetworkMode.Host) mpManager.broadcast({ type: 'GAME_STATE', payload: newState });
+      if (networkMode === NetworkMode.Host) mpManager.broadcast({ type: 'GAME_STATE', payload: { ...newState, lastActivePlayerId: id } });
       return newState;
     });
     
@@ -357,7 +384,8 @@ const App: React.FC = () => {
           nextState = { ...prev, deck: newDeck, discardPile: newDiscard, players: newPlayers, currentPlayerIndex: nextIndex };
       }
 
-      if (networkMode === NetworkMode.Host) mpManager.broadcast({ type: 'GAME_STATE', payload: nextState });
+      setLastActivePlayerId(playerId);
+      if (networkMode === NetworkMode.Host) mpManager.broadcast({ type: 'GAME_STATE', payload: { ...nextState, lastActivePlayerId: playerId } });
       return nextState;
     });
   };
@@ -384,7 +412,7 @@ const App: React.FC = () => {
       if (newPlayers[playerId].hand.length === 0) {
         playSound('win');
         const winState = { ...prev, players: newPlayers, discardPile: [...prev.discardPile, card], status: GameStatus.GameOver, winner: prev.players[playerId] };
-        if (networkMode === NetworkMode.Host) mpManager.broadcast({ type: 'GAME_STATE', payload: winState });
+        if (networkMode === NetworkMode.Host) mpManager.broadcast({ type: 'GAME_STATE', payload: { ...winState, lastActivePlayerId: playerId } });
         return winState;
       }
 
@@ -418,6 +446,7 @@ const App: React.FC = () => {
       }
 
       setLastAction(actionText);
+      setLastActivePlayerId(playerId);
       let nextIndex = getNextPlayerIndex(prev.currentPlayerIndex, prev.players.length, nextDirection);
       let nextState: GameState;
 
@@ -434,7 +463,7 @@ const App: React.FC = () => {
           };
       }
 
-      if (networkMode === NetworkMode.Host) mpManager.broadcast({ type: 'GAME_STATE', payload: nextState });
+      if (networkMode === NetworkMode.Host) mpManager.broadcast({ type: 'GAME_STATE', payload: { ...nextState, lastActivePlayerId: playerId } });
       return nextState;
     });
   };
@@ -704,6 +733,8 @@ const App: React.FC = () => {
         lastAction={lastAction}
         mustDraw={mustDraw}
         roomId={gameState.roomId}
+        myPlayerId={myPlayerId}
+        lastActivePlayerId={lastActivePlayerId}
       />
 
       <PlayerHand 
