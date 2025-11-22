@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import CardView from './CardView';
 import { Card, CardColor, Player, GameStatus, ChatMessage } from '../types';
-import { Bot, Trophy, RotateCw, User, Copy, Check, MessageCircle, Smile, Settings, Send, X } from 'lucide-react';
+import { Bot, Trophy, RotateCw, User, Copy, Check, MessageCircle, Smile, Settings, Send, X, LogOut, HelpCircle } from 'lucide-react';
 import { soundManager } from '../utils/sound';
 
 interface GameTableProps {
@@ -27,6 +27,9 @@ interface GameTableProps {
   onSendChat: (text: string) => void;
   onSendEmote: (emote: string) => void;
   onOpenSettings: () => void;
+  onExitGame: () => void;
+  onShowRules: () => void;
+  onRestartGame?: () => void;
 }
 
 interface FlyingCardState {
@@ -67,7 +70,10 @@ const GameTable: React.FC<GameTableProps> = ({
   chatMessages,
   onSendChat,
   onSendEmote,
-  onOpenSettings
+  onOpenSettings,
+  onExitGame,
+  onShowRules,
+  onRestartGame
 }) => {
   
   const [flyingCard, setFlyingCard] = useState<FlyingCardState | null>(null);
@@ -79,14 +85,16 @@ const GameTable: React.FC<GameTableProps> = ({
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isEmoteOpen, setIsEmoteOpen] = useState(false);
   const [chatInput, setChatInput] = useState('');
-  const chatEndRef = useRef<HTMLDivElement>(null);
-
-  // Track previous hand sizes to detect draws
+  
+  // Refs
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   const prevHandSizes = useRef<number[]>([]);
 
+  // Correct Scroll Behavior: Scroll container, NOT the window
   useEffect(() => {
-      if(isChatOpen && chatEndRef.current) {
-          chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      if(isChatOpen && chatContainerRef.current) {
+          // Setting scrollTop directly avoids browser "scrollIntoView" page jumps
+          chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
       }
   }, [chatMessages, isChatOpen]);
 
@@ -368,71 +376,93 @@ const GameTable: React.FC<GameTableProps> = ({
     <div className={`relative w-full h-full bg-gradient-to-br ${getAmbientGlow()} transition-colors duration-1000 overflow-hidden`}>
       <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/felt.png')] pointer-events-none"></div>
       
-      {/* HUD Sidebar */}
-      <div className="absolute right-4 top-20 flex flex-col gap-3 z-40 pointer-events-auto">
+      {/* --- Unified Top Bar HUD --- */}
+      <div className="absolute top-0 left-0 w-full p-2 md:p-4 flex justify-between items-start z-50 pointer-events-none">
+          {/* Left: Exit */}
           <button 
-            onClick={() => setIsChatOpen(!isChatOpen)}
-            className="w-10 h-10 md:w-12 md:h-12 rounded-full backdrop-blur-md flex items-center justify-center border border-white/10 shadow-lg transition-all active:scale-95 group relative bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500 hover:text-white"
+            onClick={onExitGame} 
+            className="pointer-events-auto bg-slate-800/80 text-white w-10 h-10 md:w-auto md:px-4 md:py-2 rounded-full font-bold hover:bg-red-600 hover:shadow-[0_0_15px_rgba(220,38,38,0.5)] transition-all border border-white/10 backdrop-blur-md shadow-lg flex items-center justify-center gap-2 group"
           >
-              <MessageCircle size={20} />
-              {chatMessages.length > 0 && <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-ping"></div>}
+             <LogOut size={18} />
+             <span className="hidden md:inline">EXIT</span>
           </button>
-          
-          <div className="relative">
-              <button 
-                onClick={() => setIsEmoteOpen(!isEmoteOpen)}
-                className="w-10 h-10 md:w-12 md:h-12 rounded-full backdrop-blur-md flex items-center justify-center border border-white/10 shadow-lg transition-all active:scale-95 group relative bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500 hover:text-white"
-              >
-                  <Smile size={20} />
-              </button>
-              {/* Emote Picker */}
-              {isEmoteOpen && (
-                  <div className="absolute right-full top-0 mr-3 w-48 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl p-2 grid grid-cols-4 gap-2 animate-in fade-in zoom-in slide-in-from-right-2 origin-top-right shadow-2xl">
-                       {EMOTES.map(emoji => (
-                           <button 
-                            key={emoji}
-                            onClick={() => { onSendEmote(emoji); setIsEmoteOpen(false); }}
-                            className="text-2xl hover:scale-125 transition-transform p-1"
-                           >
-                               {emoji}
-                           </button>
-                       ))}
-                  </div>
-              )}
+
+          {/* Right: Controls Cluster */}
+          <div className="pointer-events-auto flex items-center gap-2 md:gap-3 bg-black/20 backdrop-blur-md p-1.5 rounded-full border border-white/5 shadow-xl">
+               {onRestartGame && (
+                   <button onClick={onRestartGame} className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center hover:bg-white/10 transition-all text-white/70 hover:text-white" title="Restart">
+                       <RotateCw size={18} />
+                   </button>
+               )}
+               <button onClick={onShowRules} className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center hover:bg-white/10 transition-all text-white/70 hover:text-white" title="Rules">
+                   <HelpCircle size={20} />
+               </button>
+               <div className="w-[1px] h-6 bg-white/10"></div>
+               <button 
+                  onClick={() => setIsChatOpen(!isChatOpen)}
+                  className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-all relative ${isChatOpen ? 'bg-indigo-500 text-white' : 'text-white/70 hover:text-white hover:bg-white/10'}`}
+               >
+                   <MessageCircle size={20} />
+                   {chatMessages.length > 0 && <div className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-slate-900 animate-pulse"></div>}
+               </button>
+               <div className="relative">
+                   <button 
+                      onClick={() => setIsEmoteOpen(!isEmoteOpen)}
+                      className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-all ${isEmoteOpen ? 'bg-yellow-500 text-black' : 'text-white/70 hover:text-white hover:bg-white/10'}`}
+                   >
+                       <Smile size={20} />
+                   </button>
+                    {/* Emote Picker (Dropdown from top right) */}
+                    {isEmoteOpen && (
+                        <div className="absolute right-0 top-full mt-3 w-48 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl p-2 grid grid-cols-4 gap-2 animate-in fade-in zoom-in slide-in-from-top-2 origin-top-right shadow-2xl z-[60]">
+                            {EMOTES.map(emoji => (
+                                <button 
+                                    key={emoji}
+                                    onClick={() => { onSendEmote(emoji); setIsEmoteOpen(false); }}
+                                    className="text-2xl hover:scale-125 transition-transform p-1 rounded hover:bg-white/5"
+                                >
+                                    {emoji}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+               </div>
+               <button 
+                  onClick={onOpenSettings}
+                  className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center hover:bg-white/10 transition-all text-white/70 hover:text-white"
+               >
+                   <Settings size={20} />
+               </button>
           </div>
-          
-          <button 
-            onClick={onOpenSettings}
-            className="w-10 h-10 md:w-12 md:h-12 rounded-full backdrop-blur-md flex items-center justify-center border border-white/10 shadow-lg transition-all active:scale-95 group relative bg-slate-500/20 text-slate-300 hover:bg-slate-500 hover:text-white"
-          >
-              <Settings size={20} />
-          </button>
       </div>
 
-      {/* Chat Overlay */}
+      {/* Chat Overlay (Fixed Position) */}
       {isChatOpen && (
-          <div className="absolute bottom-24 right-4 md:right-20 w-80 max-h-[400px] h-[50vh] bg-slate-900/90 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl z-50 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-5">
+          <div className="absolute top-16 md:top-20 right-2 md:right-4 w-[calc(100vw-1rem)] md:w-80 max-h-[50vh] md:max-h-[400px] bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl z-50 flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-5 origin-top-right">
               <div className="p-3 border-b border-white/5 flex justify-between items-center bg-black/20">
                   <span className="font-bold text-white text-sm flex items-center gap-2"><MessageCircle size={14}/> Chat</span>
                   <button onClick={() => setIsChatOpen(false)} className="text-white/40 hover:text-white"><X size={16}/></button>
               </div>
-              <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-3">
-                  {chatMessages.map(msg => (
-                      <div key={msg.id} className="flex flex-col">
-                          <span className={`text-[10px] font-bold ${msg.playerId === myPlayerId ? 'text-green-400 self-end' : 'text-indigo-400 self-start'}`}>{msg.playerName}</span>
-                          <div className={`px-3 py-2 rounded-xl text-sm max-w-[85%] break-words ${msg.playerId === myPlayerId ? 'bg-green-500/20 text-green-100 self-end rounded-tr-none' : 'bg-indigo-500/20 text-indigo-100 self-start rounded-tl-none'}`}>
-                              {msg.text}
+              <div ref={chatContainerRef} className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-3 min-h-[150px]">
+                  {chatMessages.length === 0 ? (
+                      <div className="text-center text-white/30 text-xs py-4">No messages yet...</div>
+                  ) : (
+                      chatMessages.map(msg => (
+                          <div key={msg.id} className="flex flex-col">
+                              <span className={`text-[10px] font-bold ${msg.playerId === myPlayerId ? 'text-green-400 self-end' : 'text-indigo-400 self-start'}`}>{msg.playerName}</span>
+                              <div className={`px-3 py-2 rounded-xl text-sm max-w-[85%] break-words ${msg.playerId === myPlayerId ? 'bg-green-500/20 text-green-100 self-end rounded-tr-none' : 'bg-indigo-500/20 text-indigo-100 self-start rounded-tl-none'}`}>
+                                  {msg.text}
+                              </div>
                           </div>
-                      </div>
-                  ))}
-                  <div ref={chatEndRef} />
+                      ))
+                  )}
               </div>
               <form onSubmit={handleSendChatSubmit} className="p-2 border-t border-white/5 flex gap-2 bg-black/20">
                   <input 
                     value={chatInput}
                     onChange={e => setChatInput(e.target.value)}
-                    className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
-                    placeholder="Say something..."
+                    className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 placeholder:text-white/20"
+                    placeholder="Type a message..."
                     maxLength={50}
                   />
                   <button type="submit" disabled={!chatInput.trim()} className="p-2 bg-indigo-600 rounded-lg text-white disabled:opacity-50 hover:bg-indigo-500 transition-colors">
@@ -443,14 +473,13 @@ const GameTable: React.FC<GameTableProps> = ({
       )}
 
       {roomId && (
-         <div className="absolute top-4 left-20 z-50">
+         <div className="absolute top-16 left-2 z-40 md:top-20">
              <div 
                 onClick={handleCopyId}
-                className="glass-panel px-4 py-2 rounded-full flex items-center gap-2 cursor-pointer hover:bg-white/10 active:scale-95 transition-all group"
+                className="glass-panel px-3 py-1.5 md:px-4 md:py-2 rounded-full flex items-center gap-2 cursor-pointer hover:bg-white/10 active:scale-95 transition-all group border border-white/5"
              >
-                {copiedId ? <Check size={16} className="text-green-400" /> : <Copy size={16} className="text-white/60 group-hover:text-white" />}
-                <span className="text-xs font-mono text-white/80 group-hover:text-white">ROOM: {roomId}</span>
-                {copiedId && <span className="text-xs font-bold text-green-400 ml-1 animate-pulse">Copied!</span>}
+                {copiedId ? <Check size={14} className="text-green-400" /> : <Copy size={14} className="text-white/60 group-hover:text-white" />}
+                <span className="text-[10px] md:text-xs font-mono text-white/80 group-hover:text-white">ROOM: {roomId}</span>
              </div>
          </div>
       )}
@@ -460,11 +489,11 @@ const GameTable: React.FC<GameTableProps> = ({
          <div className="absolute -top-24 h-8 pointer-events-none">
             <span className="px-4 py-1 bg-black/40 backdrop-blur-md rounded-full border border-white/10 text-white/80 text-sm font-medium shadow-lg whitespace-nowrap">{lastAction}</span>
          </div>
-         <div className={`absolute w-[500px] h-[500px] border-[1px] border-white/5 rounded-full ${direction === 1 ? 'animate-spin-slow' : 'animate-spin-slow-reverse'} pointer-events-none flex items-center justify-center`}>
+         <div className={`absolute w-[300px] h-[300px] md:w-[500px] md:h-[500px] border-[1px] border-white/5 rounded-full ${direction === 1 ? 'animate-spin-slow' : 'animate-spin-slow-reverse'} pointer-events-none flex items-center justify-center`}>
              <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-900 p-2 rounded-full"><RotateCw className="text-white/20" /></div>
              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 bg-slate-900 p-2 rounded-full"><RotateCw className="text-white/20 rotate-180" /></div>
          </div>
-         <div className="flex gap-12 md:gap-16 items-center mt-4 relative">
+         <div className="flex gap-8 md:gap-16 items-center mt-4 relative">
             <div 
                 className={`relative group transition-transform duration-200 ${mustDraw ? 'scale-110 cursor-pointer' : ''}`} 
                 onClick={currentPlayerIndex === myPlayerId ? onDrawCard : undefined}

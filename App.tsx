@@ -14,9 +14,7 @@ import PlayerHand from './components/PlayerHand';
 import ColorPicker from './components/ColorPicker';
 import Lobby from './components/Lobby';
 import { ConfirmModal, RulesModal, SettingsModal } from './components/Modals';
-import { 
-  Volume2, VolumeX, Shuffle, HelpCircle, Download, Share, X
-} from 'lucide-react';
+import { Download, Share, X } from 'lucide-react';
 
 const INITIAL_HAND_SIZE = 7;
 const BOT_EMOTES = ['🤔', '😅', '👀', '🤯', '👋'];
@@ -756,18 +754,6 @@ const App: React.FC = () => {
 
   return (
     <div className="w-full h-full relative overflow-hidden">
-      <div className="absolute top-0 left-0 right-0 z-50 p-4 flex justify-between items-start pointer-events-none">
-        <div className="pointer-events-auto flex gap-2">
-            <button onClick={triggerExitConfirm} className="bg-slate-800/80 text-white px-6 py-2 rounded-full font-bold hover:bg-red-600 hover:shadow-[0_0_15px_rgba(220,38,38,0.5)] transition-all border border-white/10 backdrop-blur-md shadow-lg">EXIT</button>
-        </div>
-        <div className="flex items-center gap-3 pointer-events-auto">
-             <button onClick={() => setShowRules(true)} className="w-10 h-10 bg-slate-800/80 rounded-full flex items-center justify-center hover:bg-white/20 transition-all border border-white/10 shadow-lg text-white"><HelpCircle size={20} /></button>
-             {(networkMode === NetworkMode.Offline || networkMode === NetworkMode.Host) && (
-                 <button onClick={triggerRestartConfirm} className="w-10 h-10 bg-slate-800/80 rounded-full flex items-center justify-center hover:bg-blue-600 hover:rotate-180 transition-all duration-500 border border-white/10 shadow-lg group text-white"><Shuffle size={20} /></button>
-             )}
-        </div>
-      </div>
-
       <GameTable 
         deckCount={gameState.deck.length}
         discardTop={gameState.discardPile[gameState.discardPile.length - 1]}
@@ -790,6 +776,9 @@ const App: React.FC = () => {
         onSendChat={onSendChat}
         onSendEmote={onSendEmote}
         onOpenSettings={() => setShowSettings(true)}
+        onExitGame={triggerExitConfirm}
+        onShowRules={() => setShowRules(true)}
+        onRestartGame={(networkMode === NetworkMode.Offline || networkMode === NetworkMode.Host) ? triggerRestartConfirm : undefined}
       />
       
       <PlayerHand 
