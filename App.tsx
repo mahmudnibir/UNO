@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Card, CardColor, CardValue, Player, GameState, GameStatus, NetworkMode, NetworkMessage 
+  Card, CardColor, CardValue, Player, GameState, GameStatus, NetworkMode, NetworkMessage, MatchStats 
 } from './types';
 import { 
   createDeck, shuffleDeck, getNextPlayerIndex, findBestMove, pickBestColorForBot, isValidPlay
@@ -40,6 +40,12 @@ const App: React.FC = () => {
 
   // Ref to track latest state inside closures/callbacks
   const gameStateRef = useRef<GameState | null>(null);
+  
+  // Stats tracking for achievements
+  const matchStatsRef = useRef<MatchStats>({
+      turns: 0, maxHandSize: 7, plus4Played: 0, plus2Played: 0, skipsPlayed: 0, reversesPlayed: 0,
+      wildsPlayed: 0, redPlayed: 0, bluePlayed: 0, greenPlayed: 0, yellowPlayed: 0
+  });
 
   // Multiplayer State
   const [networkMode, setNetworkMode] = useState<NetworkMode>(NetworkMode.Offline);
@@ -140,7 +146,7 @@ const App: React.FC = () => {
               setLastActivePlayerId((data.payload as any).lastActivePlayerId);
           }
           if (data.payload.status === GameStatus.GameOver && data.payload.winner?.id === 1) { // 1 is me as client
-              // Logic for client achievement tracking would go here
+              // Note: Clients handle stats locally in saveGameEnd when they detect win
           }
           playSound('turn'); 
         }
@@ -230,6 +236,12 @@ const App: React.FC = () => {
   // --- Game Initialization ---
   const startGame = () => {
     playSound('shuffle');
+    // Reset match stats
+    matchStatsRef.current = {
+        turns: 0, maxHandSize: 7, plus4Played: 0, plus2Played: 0, skipsPlayed: 0, reversesPlayed: 0,
+        wildsPlayed: 0, redPlayed: 0, bluePlayed: 0, greenPlayed: 0, yellowPlayed: 0
+    };
+
     const deck = createDeck();
     const players: Player[] = [];
     
@@ -438,6 +450,15 @@ const App: React.FC = () => {
           const nextIndex = getNextPlayerIndex(prev.currentPlayerIndex, prev.players.length, prev.direction);
           nextState = { ...prev, deck: newDeck, discardPile: newDiscard, players: newPlayers, currentPlayerIndex: nextIndex };
       }
+      
+      // Update max hand size for self stats
+      if (playerId === myPlayerId) {
+          const currentSize = newPlayers[myPlayerId].hand.length;
+          if (currentSize > matchStatsRef.current.maxHandSize) {
+              matchStatsRef.current.maxHandSize = currentSize;
+          }
+      }
+
       setLastActivePlayerId(playerId);
       if (networkMode === NetworkMode.Host) mpManager.broadcast({ type: 'GAME_STATE', payload: { ...nextState, lastActivePlayerId: playerId } });
       return nextState;
@@ -445,6 +466,22 @@ const App: React.FC = () => {
   };
 
   const executeMove = (playerId: number, card: Card, wildColor?: CardColor) => {
+    // Track stats for Self
+    if (playerId === myPlayerId) {
+        matchStatsRef.current.turns++;
+        if (card.value === CardValue.DrawTwo) matchStatsRef.current.plus2Played++;
+        if (card.value === CardValue.WildDrawFour) matchStatsRef.current.plus4Played++;
+        if (card.value === CardValue.Skip) matchStatsRef.current.skipsPlayed++;
+        if (card.value === CardValue.Reverse) matchStatsRef.current.reversesPlayed++;
+        if (card.color === CardColor.Wild) matchStatsRef.current.wildsPlayed++;
+        
+        // Count colors (use actual color for standard, chosen for wild not counted as played color usually, but let's count played card ink)
+        if (card.color === CardColor.Red) matchStatsRef.current.redPlayed++;
+        if (card.color === CardColor.Blue) matchStatsRef.current.bluePlayed++;
+        if (card.color === CardColor.Green) matchStatsRef.current.greenPlayed++;
+        if (card.color === CardColor.Yellow) matchStatsRef.current.yellowPlayed++;
+    }
+
     setGameState(prev => {
       if (!prev) return null;
       const player = prev.players[playerId];
@@ -465,14 +502,18 @@ const App: React.FC = () => {
 
       if (newPlayers[playerId].hand.length === 0) {
         playSound('win');
-        // --- SAVE STATS (Offline/Host only trigger this locally) ---
+        
+        // --- SAVE STATS ---
         if (networkMode !== NetworkMode.Client) {
-            // If I am the winner (ID 0)
+            // I am host or offline player
             if (playerId === 0) {
-                saveGameEnd(true, prev.turnCount, botCount, networkMode === NetworkMode.Host ? 'Online Host' : 'Offline');
+                // I won
+                matchStatsRef.current.finalCardValue = card.value;
+                matchStatsRef.current.finalCardColor = card.color;
+                saveGameEnd(true, matchStatsRef.current, botCount, networkMode === NetworkMode.Host ? 'Online Host' : 'Offline');
             } else if (playerId !== 0 && networkMode === NetworkMode.Offline) {
                 // I lost against bots
-                saveGameEnd(false, prev.turnCount, botCount, 'Offline');
+                saveGameEnd(false, matchStatsRef.current, botCount, 'Offline');
             }
         }
         

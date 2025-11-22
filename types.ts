@@ -85,6 +85,22 @@ export interface GameStats {
   currentStreak: number;
 }
 
+export interface MatchStats {
+  turns: number;
+  maxHandSize: number;
+  plus4Played: number;
+  plus2Played: number;
+  skipsPlayed: number;
+  reversesPlayed: number;
+  wildsPlayed: number;
+  redPlayed: number;
+  bluePlayed: number;
+  greenPlayed: number;
+  yellowPlayed: number;
+  finalCardValue?: CardValue;
+  finalCardColor?: CardColor;
+}
+
 export interface Achievement {
   id: string;
   title: string;

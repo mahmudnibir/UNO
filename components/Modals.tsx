@@ -1,12 +1,18 @@
 
 import React, { useEffect, useState } from 'react';
-import { X, Trophy, BookOpen, AlertTriangle, Star, Calendar, Zap, Flame, Bot, Heart, Shield } from 'lucide-react';
+import { 
+    X, Trophy, BookOpen, AlertTriangle, Star, Calendar, Zap, Flame, Bot, Heart, Shield,
+    Swords, Sparkles, Circle, Layers, Timer, PlusSquare, Palette, ShieldCheck, Crown, Droplet, Trees, Sun,
+    RefreshCw, Ban
+} from 'lucide-react';
 import { Achievement, LeaderboardEntry } from '../types';
 import { getAchievements, getLeaderboard } from '../utils/storage';
 
 // --- Icon Mapping Helper ---
 const IconMap: Record<string, any> = {
-  Trophy, Star, Flame, Bot, Heart, Zap, Shield
+  Trophy, Star, Flame, Bot, Heart, Zap, Shield,
+  Swords, Sparkles, Circle, Layers, Timer, PlusSquare, Palette, ShieldCheck, Crown, Droplet, Trees, Sun,
+  RefreshCw, Ban
 };
 
 // --- MODAL WRAPPER ---
@@ -101,7 +107,7 @@ export const AchievementsModal: React.FC<{ onClose: () => void }> = ({ onClose }
     }, []);
 
     const unlockedCount = achievements.filter(a => a.unlocked).length;
-    const progress = (unlockedCount / achievements.length) * 100;
+    const progress = Math.round((unlockedCount / achievements.length) * 100);
 
     return (
         <ModalWrapper onClose={onClose} title={<><Star className="text-yellow-400" /> Achievements</>} colorClass="from-indigo-950 to-slate-950">

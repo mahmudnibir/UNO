@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import CardView from './CardView';
 import { Card, CardColor, Player, GameStatus } from '../types';
-import { Bot, Trophy, RotateCw, User, Copy, Check } from 'lucide-react';
+import { Bot, Trophy, RotateCw, User, Copy, Check, MessageCircle, Smile, Gift, Settings } from 'lucide-react';
 import { soundManager } from '../utils/sound';
 
 interface GameTableProps {
@@ -98,17 +98,11 @@ const GameTable: React.FC<GameTableProps> = ({
           const prev = prevHandSizes.current[i];
           // If hand size increased AND it wasn't a massive jump (initial deal)
           if (prev !== undefined && p.hand.length > prev && (p.hand.length - prev) < 5) {
-              // Trigger draw animation for this player
-              // We only trigger if this player matches the last active player (to avoid race conditions or multi-trigger)
-              // Or simply rely on the loop.
-              // To prevent spam, only animate if lastActivePlayerId matches? 
-              // Actually, relying on hand size diff is safer for penalties.
               
               // Calculate Target Coordinates relative to Deck (Center)
               const w = window.innerWidth;
               const h = window.innerHeight;
               
-              // Approximate Deck Center: W/2 - 60, H * 0.4
               const startX = w / 2 - 60;
               const startY = h * 0.4;
 
@@ -140,7 +134,6 @@ const GameTable: React.FC<GameTableProps> = ({
                       break;
               }
 
-              // Calculate Delta for CSS transform
               const tx = destX - startX;
               const ty = destY - startY;
 
@@ -319,6 +312,26 @@ const GameTable: React.FC<GameTableProps> = ({
     <div className={`relative w-full h-full bg-gradient-to-br ${getAmbientGlow()} transition-colors duration-1000 overflow-hidden`}>
       <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/felt.png')] pointer-events-none"></div>
       
+      {/* Placeholder Features Sidebar */}
+      <div className="absolute right-4 top-20 flex flex-col gap-3 z-40 pointer-events-auto">
+          {[
+              { icon: MessageCircle, label: 'Chat', color: 'bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500 hover:text-white' },
+              { icon: Smile, label: 'Emotes', color: 'bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500 hover:text-white' },
+              { icon: Gift, label: 'Gifts', color: 'bg-pink-500/20 text-pink-300 hover:bg-pink-500 hover:text-white' },
+              { icon: Settings, label: 'Settings', color: 'bg-slate-500/20 text-slate-300 hover:bg-slate-500 hover:text-white' },
+          ].map((item, i) => (
+              <button 
+                key={i} 
+                className={`w-10 h-10 md:w-12 md:h-12 rounded-full backdrop-blur-md flex items-center justify-center border border-white/10 shadow-lg transition-all active:scale-95 group relative ${item.color}`}
+              >
+                  <item.icon size={20} />
+                  <span className="absolute right-full mr-2 bg-black/80 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                      {item.label} (Coming Soon)
+                  </span>
+              </button>
+          ))}
+      </div>
+
       {roomId && (
          <div className="absolute top-4 left-20 z-50">
              <div 
