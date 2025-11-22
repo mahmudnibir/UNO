@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { 
     X, Trophy, BookOpen, AlertTriangle, Star, Calendar, Zap, Flame, Bot, Heart, Shield,
     Swords, Sparkles, Circle, Layers, Timer, PlusSquare, Palette, ShieldCheck, Crown, Droplet, Trees, Sun,
-    RefreshCw, Ban
+    RefreshCw, Ban, Settings, Volume2, VolumeX, LogOut, Music
 } from 'lucide-react';
 import { Achievement, LeaderboardEntry } from '../types';
 import { getAchievements, getLeaderboard } from '../utils/storage';
@@ -38,6 +38,66 @@ const ModalWrapper: React.FC<{ onClose: () => void; children: React.ReactNode; t
         </div>
     </div>
 );
+
+// --- SETTINGS MODAL ---
+interface SettingsModalProps {
+    onClose: () => void;
+    isSoundEnabled: boolean;
+    toggleSound: () => void;
+    onExitGame: () => void;
+}
+
+export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, isSoundEnabled, toggleSound, onExitGame }) => {
+    return (
+        <ModalWrapper onClose={onClose} title={<><Settings className="text-slate-400" /> Settings</>} colorClass="from-slate-900 to-black">
+            <div className="space-y-6">
+                <div className="bg-white/5 p-4 rounded-xl border border-white/5 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-lg ${isSoundEnabled ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                            {isSoundEnabled ? <Volume2 size={24} /> : <VolumeX size={24} />}
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-white">Sound Effects</h3>
+                            <p className="text-xs text-slate-400">Game audio and feedback</p>
+                        </div>
+                    </div>
+                    <button 
+                        onClick={toggleSound}
+                        className={`w-14 h-8 rounded-full relative transition-colors duration-300 ${isSoundEnabled ? 'bg-green-500' : 'bg-slate-700'}`}
+                    >
+                        <div className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow-md transition-all duration-300 ${isSoundEnabled ? 'left-7' : 'left-1'}`} />
+                    </button>
+                </div>
+
+                <div className="bg-white/5 p-4 rounded-xl border border-white/5 flex items-center justify-between opacity-50 cursor-not-allowed">
+                     <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-indigo-500/20 text-indigo-400">
+                            <Music size={24} />
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-white">Background Music</h3>
+                            <p className="text-xs text-slate-400">Coming soon</p>
+                        </div>
+                    </div>
+                    <div className="w-14 h-8 rounded-full bg-slate-700 relative">
+                        <div className="absolute top-1 left-1 w-6 h-6 bg-slate-500 rounded-full" />
+                    </div>
+                </div>
+
+                <div className="pt-4 border-t border-white/10">
+                    <button 
+                        onClick={onExitGame}
+                        className="w-full py-4 bg-red-600/10 hover:bg-red-600 border border-red-600/50 hover:border-red-600 text-red-500 hover:text-white rounded-xl font-bold transition-all flex items-center justify-center gap-2 group"
+                    >
+                        <LogOut size={20} className="group-hover:-translate-x-1 transition-transform" />
+                        EXIT GAME
+                    </button>
+                    <p className="text-center text-xs text-slate-500 mt-2">Any unsaved progress will be lost.</p>
+                </div>
+            </div>
+        </ModalWrapper>
+    );
+};
 
 // --- RULES MODAL ---
 export const RulesModal: React.FC<{ onClose: () => void }> = ({ onClose }) => (

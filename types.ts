@@ -71,9 +71,19 @@ export enum NetworkMode {
 }
 
 export interface NetworkMessage {
-  type: 'GAME_STATE' | 'PLAY_CARD' | 'DRAW_CARD' | 'SHOUT_UNO' | 'JOIN_REQUEST' | 'PLAYER_JOINED' | 'ROOM_INFO' | 'KICKED' | 'PLAYER_LEFT';
+  type: 'GAME_STATE' | 'PLAY_CARD' | 'DRAW_CARD' | 'SHOUT_UNO' | 'JOIN_REQUEST' | 'PLAYER_JOINED' | 'ROOM_INFO' | 'KICKED' | 'PLAYER_LEFT' | 'CHAT' | 'EMOTE';
   payload?: any;
   playerId?: number;
+  text?: string;
+  emoteId?: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  playerId: number;
+  playerName: string;
+  text: string;
+  timestamp: number;
 }
 
 // --- Stats & Persistence ---

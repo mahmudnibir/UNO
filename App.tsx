@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Card, CardColor, CardValue, Player, GameState, GameStatus, NetworkMode, NetworkMessage, MatchStats 
+  Card, CardColor, CardValue, Player, GameState, GameStatus, NetworkMode, NetworkMessage, MatchStats, ChatMessage 
 } from './types';
 import { 
   createDeck, shuffleDeck, getNextPlayerIndex, findBestMove, pickBestColorForBot, isValidPlay
@@ -13,12 +13,13 @@ import GameTable from './components/GameTable';
 import PlayerHand from './components/PlayerHand';
 import ColorPicker from './components/ColorPicker';
 import Lobby from './components/Lobby';
-import { ConfirmModal, RulesModal } from './components/Modals';
+import { ConfirmModal, RulesModal, SettingsModal } from './components/Modals';
 import { 
   Volume2, VolumeX, Shuffle, HelpCircle, Download, Share, X
 } from 'lucide-react';
 
 const INITIAL_HAND_SIZE = 7;
+const BOT_EMOTES = ['🤔', '😅', '👀', '🤯', '👋'];
 
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -30,6 +31,7 @@ const App: React.FC = () => {
   
   // UI States
   const [showRules, setShowRules] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [confirmModal, setConfirmModal] = useState<{
       isOpen: boolean;
       title: string;
@@ -37,6 +39,11 @@ const App: React.FC = () => {
       onConfirm: () => void;
       type: 'danger' | 'neutral';
   }>({ isOpen: false, title: '', message: '', onConfirm: () => {}, type: 'neutral' });
+
+  // Chat & Emote State
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [activeEmotes, setActiveEmotes] = useState<Record<number, string>>({});
+  const [activeBubbles, setActiveBubbles] = useState<Record<number, string>>({});
 
   // Ref to track latest state inside closures/callbacks
   const gameStateRef = useRef<GameState | null>(null);
@@ -138,6 +145,28 @@ const App: React.FC = () => {
   // Initialize Multiplayer Listeners
   useEffect(() => {
     mpManager.initialize((data: NetworkMessage) => {
+      if (data.type === 'CHAT' && data.text) {
+          const msg: ChatMessage = {
+              id: Math.random().toString(),
+              playerId: data.playerId || 0,
+              playerName: gameStateRef.current?.players[data.playerId || 0]?.name || "Player",
+              text: data.text,
+              timestamp: Date.now()
+          };
+          setChatMessages(prev => [...prev, msg]);
+          playSound('play'); // Using 'play' sound for chat notification
+          
+          if(data.playerId !== undefined) {
+             handleBubbleDisplay(data.playerId, data.text);
+          }
+      }
+
+      if (data.type === 'EMOTE' && data.emoteId) {
+          if (data.playerId !== undefined) {
+              handleEmoteDisplay(data.playerId, data.emoteId);
+          }
+      }
+
       if (networkMode === NetworkMode.Client) {
         if (data.type === 'GAME_STATE') {
           setGameState(data.payload);
@@ -172,7 +201,57 @@ const App: React.FC = () => {
         if (data.type === 'SHOUT_UNO') handleShoutUno(data.payload.playerId);
       }
     });
-  }, [networkMode, gameState]);
+  }, [networkMode, gameState]); // Re-subscribe if mode changes, but mostly stable
+
+  // --- Helpers for Emotes/Chat ---
+  const handleEmoteDisplay = (playerId: number, emote: string) => {
+      setActiveEmotes(prev => ({ ...prev, [playerId]: emote }));
+      setTimeout(() => {
+          setActiveEmotes(prev => {
+              const next = { ...prev };
+              delete next[playerId];
+              return next;
+          });
+      }, 3000);
+      playSound('play');
+  };
+
+  const handleBubbleDisplay = (playerId: number, text: string) => {
+      setActiveBubbles(prev => ({ ...prev, [playerId]: text }));
+      setTimeout(() => {
+          setActiveBubbles(prev => {
+              const next = { ...prev };
+              delete next[playerId];
+              return next;
+          });
+      }, 4000);
+  };
+
+  const onSendChat = (text: string) => {
+      const myId = networkMode === NetworkMode.Client ? 1 : 0;
+      const msg: ChatMessage = {
+          id: Math.random().toString(),
+          playerId: myId,
+          playerName: gameStateRef.current?.players[myId]?.name || "You",
+          text,
+          timestamp: Date.now()
+      };
+      setChatMessages(prev => [...prev, msg]);
+      handleBubbleDisplay(myId, text);
+      
+      const netMsg: NetworkMessage = { type: 'CHAT', playerId: myId, text };
+      if (networkMode === NetworkMode.Host) mpManager.broadcast(netMsg);
+      if (networkMode === NetworkMode.Client) mpManager.sendToHost(netMsg);
+  };
+
+  const onSendEmote = (emote: string) => {
+      const myId = networkMode === NetworkMode.Client ? 1 : 0;
+      handleEmoteDisplay(myId, emote);
+      
+      const netMsg: NetworkMessage = { type: 'EMOTE', playerId: myId, emoteId: emote };
+      if (networkMode === NetworkMode.Host) mpManager.broadcast(netMsg);
+      if (networkMode === NetworkMode.Client) mpManager.sendToHost(netMsg);
+  }
 
   // --- Navigation Logic ---
   const handleBackToLobby = () => {
@@ -186,6 +265,7 @@ const App: React.FC = () => {
       setLobbyState('main');
       setNetworkMode(NetworkMode.Offline);
       setEnableOnlineBots(false);
+      setChatMessages([]);
   };
 
   const startHost = async () => {
@@ -241,6 +321,7 @@ const App: React.FC = () => {
         turns: 0, maxHandSize: 7, plus4Played: 0, plus2Played: 0, skipsPlayed: 0, reversesPlayed: 0,
         wildsPlayed: 0, redPlayed: 0, bluePlayed: 0, greenPlayed: 0, yellowPlayed: 0
     };
+    setChatMessages([]);
 
     const deck = createDeck();
     const players: Player[] = [];
@@ -321,6 +402,14 @@ const App: React.FC = () => {
 
   const handleBotTurn = (bot: Player) => {
     if (!gameState) return;
+    
+    // 5% chance for bot to emote randomly on turn start
+    if (Math.random() < 0.05) {
+        const randomEmote = BOT_EMOTES[Math.floor(Math.random() * BOT_EMOTES.length)];
+        handleEmoteDisplay(bot.id, randomEmote);
+        if (networkMode === NetworkMode.Host) mpManager.broadcast({ type: 'EMOTE', playerId: bot.id, emoteId: randomEmote });
+    }
+
     const { discardPile, activeColor } = gameState;
     const topCard = discardPile[discardPile.length - 1];
     const bestMove = findBestMove(bot.hand, topCard, activeColor);
@@ -598,6 +687,7 @@ const App: React.FC = () => {
               setGameState(null);
               handleBackToLobby();
               setConfirmModal(prev => ({ ...prev, isOpen: false }));
+              setShowSettings(false);
           }
       });
   };
@@ -675,7 +765,6 @@ const App: React.FC = () => {
              {(networkMode === NetworkMode.Offline || networkMode === NetworkMode.Host) && (
                  <button onClick={triggerRestartConfirm} className="w-10 h-10 bg-slate-800/80 rounded-full flex items-center justify-center hover:bg-blue-600 hover:rotate-180 transition-all duration-500 border border-white/10 shadow-lg group text-white"><Shuffle size={20} /></button>
              )}
-             <button onClick={() => setIsSoundEnabled(!isSoundEnabled)} className="w-10 h-10 bg-slate-800/80 rounded-full flex items-center justify-center hover:bg-white/20 transition-all border border-white/10 shadow-lg text-white">{isSoundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}</button>
         </div>
       </div>
 
@@ -695,6 +784,12 @@ const App: React.FC = () => {
         roomId={networkMode === NetworkMode.Host ? roomCode : undefined}
         myPlayerId={myPlayerId}
         lastActivePlayerId={lastActivePlayerId}
+        activeEmotes={activeEmotes}
+        activeBubbles={activeBubbles}
+        chatMessages={chatMessages}
+        onSendChat={onSendChat}
+        onSendEmote={onSendEmote}
+        onOpenSettings={() => setShowSettings(true)}
       />
       
       <PlayerHand 
@@ -729,6 +824,15 @@ const App: React.FC = () => {
       />
       
       {showRules && <RulesModal onClose={() => setShowRules(false)} />}
+      
+      {showSettings && (
+          <SettingsModal 
+            onClose={() => setShowSettings(false)} 
+            isSoundEnabled={isSoundEnabled}
+            toggleSound={() => setIsSoundEnabled(!isSoundEnabled)}
+            onExitGame={triggerExitConfirm}
+          />
+      )}
     </div>
   );
 };

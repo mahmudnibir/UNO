@@ -1,8 +1,8 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import CardView from './CardView';
-import { Card, CardColor, Player, GameStatus } from '../types';
-import { Bot, Trophy, RotateCw, User, Copy, Check, MessageCircle, Smile, Gift, Settings } from 'lucide-react';
+import { Card, CardColor, Player, GameStatus, ChatMessage } from '../types';
+import { Bot, Trophy, RotateCw, User, Copy, Check, MessageCircle, Smile, Settings, Send, X } from 'lucide-react';
 import { soundManager } from '../utils/sound';
 
 interface GameTableProps {
@@ -21,6 +21,12 @@ interface GameTableProps {
   roomId?: string;
   myPlayerId: number;
   lastActivePlayerId: number | null;
+  activeEmotes: Record<number, string>;
+  activeBubbles: Record<number, string>;
+  chatMessages: ChatMessage[];
+  onSendChat: (text: string) => void;
+  onSendEmote: (emote: string) => void;
+  onOpenSettings: () => void;
 }
 
 interface FlyingCardState {
@@ -38,6 +44,8 @@ interface DrawingCardState {
     rotation: number;
 }
 
+const EMOTES = ['😀', '😂', '😎', '😡', '😭', '🤯', '👋', '👍', '👎', '🎉', '💔', '👻'];
+
 const GameTable: React.FC<GameTableProps> = ({
   deckCount,
   discardTop,
@@ -53,7 +61,13 @@ const GameTable: React.FC<GameTableProps> = ({
   mustDraw,
   roomId,
   myPlayerId,
-  lastActivePlayerId
+  lastActivePlayerId,
+  activeEmotes,
+  activeBubbles,
+  chatMessages,
+  onSendChat,
+  onSendEmote,
+  onOpenSettings
 }) => {
   
   const [flyingCard, setFlyingCard] = useState<FlyingCardState | null>(null);
@@ -61,8 +75,28 @@ const GameTable: React.FC<GameTableProps> = ({
   const [visualDiscard, setVisualDiscard] = useState<Card>(discardTop);
   const [copiedId, setCopiedId] = useState(false);
   
+  // HUD State
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isEmoteOpen, setIsEmoteOpen] = useState(false);
+  const [chatInput, setChatInput] = useState('');
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
   // Track previous hand sizes to detect draws
   const prevHandSizes = useRef<number[]>([]);
+
+  useEffect(() => {
+      if(isChatOpen && chatEndRef.current) {
+          chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      }
+  }, [chatMessages, isChatOpen]);
+
+  const handleSendChatSubmit = (e: React.FormEvent) => {
+      e.preventDefault();
+      if(chatInput.trim()) {
+          onSendChat(chatInput.trim());
+          setChatInput('');
+      }
+  }
 
   // Helper to determine visual position of any player index
   const getPlayerPosition = (index: number): 'bottom' | 'top' | 'left' | 'right' => {
@@ -228,14 +262,31 @@ const GameTable: React.FC<GameTableProps> = ({
       }
   };
 
-  const BotAvatar: React.FC<{ player: Player, index: number, position: 'top' | 'left' | 'right' }> = ({ player, index, position }) => {
+  const BotAvatar: React.FC<{ player: Player, index: number, position: 'top' | 'left' | 'right' | 'bottom' }> = ({ player, index, position }) => {
     const isTurn = currentPlayerIndex === index;
     const visibleCards = Math.min(player.hand.length, 5);
+    const emote = activeEmotes[player.id];
+    const bubble = activeBubbles[player.id];
 
     return (
       <div className="relative flex flex-col items-center transition-all duration-500 group">
         {isTurn && <div className="absolute inset-0 bg-white/30 blur-xl rounded-full scale-150 animate-pulse" />}
         
+        {/* Emote Overlay */}
+        {emote && (
+            <div className="absolute -top-12 left-1/2 -translate-x-1/2 z-[60] animate-bounce text-4xl drop-shadow-lg">
+                {emote}
+            </div>
+        )}
+
+        {/* Chat Bubble */}
+        {bubble && (
+            <div className="absolute -top-14 left-1/2 -translate-x-1/2 z-[60] bg-white text-black text-xs md:text-sm font-bold px-3 py-2 rounded-xl shadow-lg border-2 border-slate-200 whitespace-nowrap animate-in fade-in zoom-in slide-in-from-bottom-2 max-w-[150px] truncate">
+                {bubble}
+                <div className="absolute bottom-[-6px] left-1/2 -translate-x-1/2 w-3 h-3 bg-white transform rotate-45 border-r-2 border-b-2 border-slate-200"></div>
+            </div>
+        )}
+
         <div className={`
           w-14 h-14 md:w-16 md:h-16 rounded-full bg-slate-800 border-4 
           ${isTurn ? 'border-yellow-400 scale-110 shadow-[0_0_20px_rgba(250,204,21,0.5)]' : 'border-slate-600 opacity-80'}
@@ -245,24 +296,29 @@ const GameTable: React.FC<GameTableProps> = ({
            <div className="absolute -bottom-2 bg-black/80 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-white/10 z-50 whitespace-nowrap">
              {player.name}
            </div>
-           <div className="absolute -top-2 -right-2 w-5 h-5 bg-red-600 rounded-full flex items-center justify-center text-[10px] font-bold text-white border-2 border-slate-900 shadow z-40">
-             {player.hand.length}
-           </div>
+           {position !== 'bottom' && (
+                <div className="absolute -top-2 -right-2 w-5 h-5 bg-red-600 rounded-full flex items-center justify-center text-[10px] font-bold text-white border-2 border-slate-900 shadow z-40">
+                    {player.hand.length}
+                </div>
+           )}
         </div>
         
-        {/* Cards always below avatar for clean uniform look */}
-        <div className="absolute top-[100%] left-1/2 -translate-x-1/2 mt-1 z-20 pointer-events-none w-0 h-0 flex items-center justify-center">
-           {Array.from({ length: visibleCards }).map((_, i) => {
-               const center = (visibleCards - 1) / 2;
-               const offset = i - center;
-               return (
-                   <div key={i} className="absolute origin-bottom transition-all duration-300" 
-                    style={{ transform: `translateX(${offset * 10}px) rotate(${offset * 5}deg) translateY(${Math.abs(offset) * 2}px)`, zIndex: i }}>
-                      <CardView size="xs" flipped className="shadow-md border border-white/10 brightness-90 scale-90" />
-                   </div>
-               );
-           })}
-        </div>
+        {/* Cards always below avatar for clean uniform look (Hidden for self/bottom player) */}
+        {position !== 'bottom' && (
+            <div className="absolute top-[100%] left-1/2 -translate-x-1/2 mt-1 z-20 pointer-events-none w-0 h-0 flex items-center justify-center">
+            {Array.from({ length: visibleCards }).map((_, i) => {
+                const center = (visibleCards - 1) / 2;
+                const offset = i - center;
+                return (
+                    <div key={i} className="absolute origin-bottom transition-all duration-300" 
+                        style={{ transform: `translateX(${offset * 10}px) rotate(${offset * 5}deg) translateY(${Math.abs(offset) * 2}px)`, zIndex: i }}>
+                        <CardView size="xs" flipped className="shadow-md border border-white/10 brightness-90 scale-90" />
+                    </div>
+                );
+            })}
+            </div>
+        )}
+        
         {player.hasUno && (
             <div className="absolute -top-12 z-50 animate-bounce">
                <div className="bg-red-600 text-white font-black px-2 py-1 rounded text-xs uppercase -rotate-12 shadow-lg border border-white">UNO!</div>
@@ -312,25 +368,79 @@ const GameTable: React.FC<GameTableProps> = ({
     <div className={`relative w-full h-full bg-gradient-to-br ${getAmbientGlow()} transition-colors duration-1000 overflow-hidden`}>
       <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/felt.png')] pointer-events-none"></div>
       
-      {/* Placeholder Features Sidebar */}
+      {/* HUD Sidebar */}
       <div className="absolute right-4 top-20 flex flex-col gap-3 z-40 pointer-events-auto">
-          {[
-              { icon: MessageCircle, label: 'Chat', color: 'bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500 hover:text-white' },
-              { icon: Smile, label: 'Emotes', color: 'bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500 hover:text-white' },
-              { icon: Gift, label: 'Gifts', color: 'bg-pink-500/20 text-pink-300 hover:bg-pink-500 hover:text-white' },
-              { icon: Settings, label: 'Settings', color: 'bg-slate-500/20 text-slate-300 hover:bg-slate-500 hover:text-white' },
-          ].map((item, i) => (
+          <button 
+            onClick={() => setIsChatOpen(!isChatOpen)}
+            className="w-10 h-10 md:w-12 md:h-12 rounded-full backdrop-blur-md flex items-center justify-center border border-white/10 shadow-lg transition-all active:scale-95 group relative bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500 hover:text-white"
+          >
+              <MessageCircle size={20} />
+              {chatMessages.length > 0 && <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-ping"></div>}
+          </button>
+          
+          <div className="relative">
               <button 
-                key={i} 
-                className={`w-10 h-10 md:w-12 md:h-12 rounded-full backdrop-blur-md flex items-center justify-center border border-white/10 shadow-lg transition-all active:scale-95 group relative ${item.color}`}
+                onClick={() => setIsEmoteOpen(!isEmoteOpen)}
+                className="w-10 h-10 md:w-12 md:h-12 rounded-full backdrop-blur-md flex items-center justify-center border border-white/10 shadow-lg transition-all active:scale-95 group relative bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500 hover:text-white"
               >
-                  <item.icon size={20} />
-                  <span className="absolute right-full mr-2 bg-black/80 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                      {item.label} (Coming Soon)
-                  </span>
+                  <Smile size={20} />
               </button>
-          ))}
+              {/* Emote Picker */}
+              {isEmoteOpen && (
+                  <div className="absolute right-full top-0 mr-3 w-48 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl p-2 grid grid-cols-4 gap-2 animate-in fade-in zoom-in slide-in-from-right-2 origin-top-right shadow-2xl">
+                       {EMOTES.map(emoji => (
+                           <button 
+                            key={emoji}
+                            onClick={() => { onSendEmote(emoji); setIsEmoteOpen(false); }}
+                            className="text-2xl hover:scale-125 transition-transform p-1"
+                           >
+                               {emoji}
+                           </button>
+                       ))}
+                  </div>
+              )}
+          </div>
+          
+          <button 
+            onClick={onOpenSettings}
+            className="w-10 h-10 md:w-12 md:h-12 rounded-full backdrop-blur-md flex items-center justify-center border border-white/10 shadow-lg transition-all active:scale-95 group relative bg-slate-500/20 text-slate-300 hover:bg-slate-500 hover:text-white"
+          >
+              <Settings size={20} />
+          </button>
       </div>
+
+      {/* Chat Overlay */}
+      {isChatOpen && (
+          <div className="absolute bottom-24 right-4 md:right-20 w-80 max-h-[400px] h-[50vh] bg-slate-900/90 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl z-50 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-5">
+              <div className="p-3 border-b border-white/5 flex justify-between items-center bg-black/20">
+                  <span className="font-bold text-white text-sm flex items-center gap-2"><MessageCircle size={14}/> Chat</span>
+                  <button onClick={() => setIsChatOpen(false)} className="text-white/40 hover:text-white"><X size={16}/></button>
+              </div>
+              <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-3">
+                  {chatMessages.map(msg => (
+                      <div key={msg.id} className="flex flex-col">
+                          <span className={`text-[10px] font-bold ${msg.playerId === myPlayerId ? 'text-green-400 self-end' : 'text-indigo-400 self-start'}`}>{msg.playerName}</span>
+                          <div className={`px-3 py-2 rounded-xl text-sm max-w-[85%] break-words ${msg.playerId === myPlayerId ? 'bg-green-500/20 text-green-100 self-end rounded-tr-none' : 'bg-indigo-500/20 text-indigo-100 self-start rounded-tl-none'}`}>
+                              {msg.text}
+                          </div>
+                      </div>
+                  ))}
+                  <div ref={chatEndRef} />
+              </div>
+              <form onSubmit={handleSendChatSubmit} className="p-2 border-t border-white/5 flex gap-2 bg-black/20">
+                  <input 
+                    value={chatInput}
+                    onChange={e => setChatInput(e.target.value)}
+                    className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                    placeholder="Say something..."
+                    maxLength={50}
+                  />
+                  <button type="submit" disabled={!chatInput.trim()} className="p-2 bg-indigo-600 rounded-lg text-white disabled:opacity-50 hover:bg-indigo-500 transition-colors">
+                      <Send size={16} />
+                  </button>
+              </form>
+          </div>
+      )}
 
       {roomId && (
          <div className="absolute top-4 left-20 z-50">
@@ -345,6 +455,7 @@ const GameTable: React.FC<GameTableProps> = ({
          </div>
       )}
 
+      {/* Main Game Circle */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[60%] w-full flex flex-col items-center z-40">
          <div className="absolute -top-24 h-8 pointer-events-none">
             <span className="px-4 py-1 bg-black/40 backdrop-blur-md rounded-full border border-white/10 text-white/80 text-sm font-medium shadow-lg whitespace-nowrap">{lastAction}</span>
@@ -386,6 +497,13 @@ const GameTable: React.FC<GameTableProps> = ({
             </div>
          </div>
       </div>
+      
+      {/* Self Avatar (Invisible but useful for positioning if needed, currently separate from GameTable main layout for avatar, 
+          but adding it here to support bubbles/emotes for self) */}
+      <div className="absolute bottom-6 left-6 z-50">
+           <BotAvatar player={players[myPlayerId]} index={myPlayerId} position="bottom" />
+      </div>
+
       {renderBots()}
     </div>
   );
