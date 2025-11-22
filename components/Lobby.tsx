@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { 
   Play, Users, Wifi, ArrowRight, Loader2, X, Clipboard, 
-  Copy, Check, Bot, Monitor, Award, Trophy, User
+  Copy, Check, Bot, Monitor, Award, Trophy, User, Edit3
 } from 'lucide-react';
 import { NetworkMode } from '../types';
 import CardView from './CardView';
@@ -36,6 +36,8 @@ interface LobbyProps {
     copiedId: boolean;
     isOffline: boolean;
     hostRoomName: string;
+    playerName: string;
+    setPlayerName: (name: string) => void;
 }
 
 const Lobby: React.FC<LobbyProps> = (props) => {
@@ -110,27 +112,46 @@ const Lobby: React.FC<LobbyProps> = (props) => {
                     {/* --- MAIN GAME CARD --- */}
                     <div className="w-full max-w-lg bg-slate-900/60 backdrop-blur-xl border border-white/10 rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-pop ring-1 ring-white/5 mt-4">
                         
-                        {/* Mode Tabs */}
-                        <div className="p-2 bg-black/20">
-                            <div className="relative flex bg-black/40 rounded-2xl p-1">
-                                <button 
-                                    onClick={props.onBackToLobby}
-                                    className={`flex-1 py-3 md:py-4 rounded-xl font-black text-xs md:text-sm uppercase tracking-wider transition-all duration-300 relative z-10 flex items-center justify-center gap-2 ${props.networkMode === NetworkMode.Offline ? 'bg-slate-800 text-white shadow-lg ring-1 ring-white/10' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
-                                >
-                                    <User size={16} /> Solo
-                                </button>
-                                <button 
-                                    onClick={() => { if(!props.isOffline) { props.setNetworkMode(NetworkMode.Host); props.setLobbyState('main'); }}}
-                                    disabled={props.isOffline}
-                                    className={`flex-1 py-3 md:py-4 rounded-xl font-black text-xs md:text-sm uppercase tracking-wider transition-all duration-300 relative z-10 flex items-center justify-center gap-2 ${props.networkMode !== NetworkMode.Offline ? 'bg-indigo-600 text-white shadow-lg ring-1 ring-white/10' : 'text-white/40 hover:text-white hover:bg-white/5'} ${props.isOffline ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                >
-                                    <Wifi size={16} /> Online
-                                </button>
+                        {/* Nickname Input - Only show in main lobby state */}
+                         {props.lobbyState === 'main' && (
+                            <div className="px-8 pt-6 pb-2">
+                                <label className="text-[10px] uppercase font-black text-indigo-300 tracking-widest mb-1 block ml-1">YOUR NICKNAME</label>
+                                <div className="relative">
+                                    <input 
+                                        value={props.playerName}
+                                        onChange={(e) => props.setPlayerName(e.target.value)}
+                                        maxLength={12}
+                                        className="w-full bg-black/30 border border-white/10 focus:border-indigo-500 rounded-xl py-3 px-4 pl-10 text-white font-bold outline-none transition-colors placeholder:text-white/20"
+                                        placeholder="Enter Name"
+                                    />
+                                    <Edit3 size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+                                </div>
                             </div>
+                        )}
+
+                        {/* Mode Tabs */}
+                        <div className="p-6 md:p-8 pb-0">
+                            {props.lobbyState === 'main' && (
+                                <div className="relative flex bg-black/40 rounded-2xl p-1 mb-6">
+                                    <button 
+                                        onClick={() => props.setNetworkMode(NetworkMode.Offline)}
+                                        className={`flex-1 py-3 md:py-4 rounded-xl font-black text-xs md:text-sm uppercase tracking-wider transition-all duration-300 relative z-10 flex items-center justify-center gap-2 ${props.networkMode === NetworkMode.Offline ? 'bg-slate-800 text-white shadow-lg ring-1 ring-white/10' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
+                                    >
+                                        <User size={16} /> Solo
+                                    </button>
+                                    <button 
+                                        onClick={() => { if(!props.isOffline) { props.setNetworkMode(NetworkMode.Host); props.setLobbyState('main'); }}}
+                                        disabled={props.isOffline}
+                                        className={`flex-1 py-3 md:py-4 rounded-xl font-black text-xs md:text-sm uppercase tracking-wider transition-all duration-300 relative z-10 flex items-center justify-center gap-2 ${props.networkMode !== NetworkMode.Offline ? 'bg-indigo-600 text-white shadow-lg ring-1 ring-white/10' : 'text-white/40 hover:text-white hover:bg-white/5'} ${props.isOffline ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    >
+                                        <Wifi size={16} /> Online
+                                    </button>
+                                </div>
+                            )}
                         </div>
 
                         {/* Content Body */}
-                        <div className="p-6 md:p-8 flex flex-col relative min-h-[300px]">
+                        <div className="px-6 md:px-8 pb-8 flex flex-col relative min-h-[200px]">
                             
                             {/* SOLO MODE */}
                             {props.networkMode === NetworkMode.Offline && (
@@ -250,11 +271,12 @@ const Lobby: React.FC<LobbyProps> = (props) => {
                                                         <div className="space-y-2">
                                                             <div className="flex items-center gap-3 p-3 bg-indigo-500/10 rounded-lg border border-indigo-500/20">
                                                                 <div className="w-2 h-2 rounded-full bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.5)]"></div>
-                                                                <span className="text-white font-bold text-sm flex-1">You (Host)</span>
+                                                                <span className="text-white font-bold text-sm flex-1">{props.playerName || 'Host'} (You)</span>
                                                             </div>
                                                             {Array.from({ length: props.connectedPeerCount }).map((_, i) => (
                                                                 <div key={i} className="flex items-center gap-3 p-3 bg-white/5 rounded-lg border border-white/5 animate-in slide-in-from-left-2">
                                                                     <div className="w-2 h-2 rounded-full bg-blue-400"></div>
+                                                                    {/* Host will see 'Guest X' until we fully implement real-time name syncing in list, but game start uses map */}
                                                                     <span className="text-white/80 font-medium text-sm flex-1">Guest {i + 1}</span>
                                                                     <button onClick={() => props.onKickPlayer(i)} className="text-white/20 hover:text-red-400 transition-colors p-1 hover:bg-white/5 rounded"><X size={14} /></button>
                                                                 </div>

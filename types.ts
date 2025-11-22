@@ -71,7 +71,7 @@ export enum NetworkMode {
 }
 
 export interface NetworkMessage {
-  type: 'GAME_STATE' | 'PLAY_CARD' | 'DRAW_CARD' | 'SHOUT_UNO' | 'JOIN_REQUEST' | 'PLAYER_JOINED' | 'ROOM_INFO' | 'KICKED' | 'PLAYER_LEFT' | 'CHAT' | 'EMOTE';
+  type: 'GAME_STATE' | 'PLAY_CARD' | 'DRAW_CARD' | 'SHOUT_UNO' | 'JOIN_REQUEST' | 'PLAYER_JOINED' | 'ROOM_INFO' | 'KICKED' | 'PLAYER_LEFT' | 'CHAT' | 'EMOTE' | 'SET_NAME';
   payload?: any;
   playerId?: number;
   text?: string;

@@ -64,6 +64,10 @@ const App: React.FC = () => {
   const [lobbyState, setLobbyState] = useState<'main' | 'host_setup' | 'join_setup' | 'client_waiting'>('main');
   const [kickMessage, setKickMessage] = useState<string | null>(null);
   
+  // Player Identity
+  const [playerName, setPlayerName] = useState<string>("Player");
+  const [guestNames, setGuestNames] = useState<Record<number, string>>({});
+  
   // PWA State
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
@@ -143,11 +147,17 @@ const App: React.FC = () => {
   // Initialize Multiplayer Listeners
   useEffect(() => {
     mpManager.initialize((data: NetworkMessage) => {
+      // Handle Nickname Sync
+      if (data.type === 'SET_NAME' && data.playerId !== undefined && data.text) {
+          setGuestNames(prev => ({ ...prev, [data.playerId!]: data.text! }));
+          return;
+      }
+
       if (data.type === 'CHAT' && data.text) {
           const msg: ChatMessage = {
               id: Math.random().toString(),
               playerId: data.playerId || 0,
-              playerName: gameStateRef.current?.players[data.playerId || 0]?.name || "Player",
+              playerName: gameStateRef.current?.players[data.playerId || 0]?.name || (data.playerId ? (guestNames[data.playerId] || `Guest ${data.playerId}`) : "Player"),
               text: data.text,
               timestamp: Date.now()
           };
@@ -187,7 +197,10 @@ const App: React.FC = () => {
            setConnectedPeerCount(data.payload.count);
            playSound('draw');
         }
-        if (data.type === 'PLAYER_LEFT') setConnectedPeerCount(data.payload.count);
+        if (data.type === 'PLAYER_LEFT') {
+            setConnectedPeerCount(data.payload.count);
+            // Optional: clear guestName if needed, but map can persist
+        }
         if (data.type === 'PLAY_CARD') {
            const { playerId, card, wildColor } = data.payload;
            executeMove(playerId, card, wildColor);
@@ -199,7 +212,7 @@ const App: React.FC = () => {
         if (data.type === 'SHOUT_UNO') handleShoutUno(data.payload.playerId);
       }
     });
-  }, [networkMode, gameState]); // Re-subscribe if mode changes, but mostly stable
+  }, [networkMode, gameState, guestNames]); // Re-subscribe if mode changes, but mostly stable
 
   // --- Helpers for Emotes/Chat ---
   const handleEmoteDisplay = (playerId: number, emote: string) => {
@@ -230,7 +243,7 @@ const App: React.FC = () => {
       const msg: ChatMessage = {
           id: Math.random().toString(),
           playerId: myId,
-          playerName: gameStateRef.current?.players[myId]?.name || "You",
+          playerName: gameStateRef.current?.players[myId]?.name || (myId === 0 ? playerName : "You"),
           text,
           timestamp: Date.now()
       };
@@ -264,6 +277,7 @@ const App: React.FC = () => {
       setNetworkMode(NetworkMode.Offline);
       setEnableOnlineBots(false);
       setChatMessages([]);
+      setGuestNames({});
   };
 
   const startHost = async () => {
@@ -292,6 +306,8 @@ const App: React.FC = () => {
           setNetworkMode(NetworkMode.Client);
           setRoomCode(code);
           setLobbyState('client_waiting');
+          // Send Nickname immediately to Host
+          mpManager.sendToHost({ type: 'SET_NAME', text: playerName });
           requestWakeLock();
           playSound('play');
       } catch (e: any) {
@@ -324,11 +340,16 @@ const App: React.FC = () => {
     const deck = createDeck();
     const players: Player[] = [];
     
-    players.push({ id: 0, name: networkMode === NetworkMode.Client ? 'Host' : 'You', hand: [], isBot: false, hasUno: false });
+    // Player 0 is always Local Host or Client Self in their own view logic, 
+    // BUT in Host Logic, 0 is Host.
+    const p0Name = networkMode === NetworkMode.Client ? (playerName || 'You') : (playerName || 'Host');
+    players.push({ id: 0, name: p0Name, hand: [], isBot: false, hasUno: false });
 
     if (networkMode === NetworkMode.Host) {
         for (let i = 0; i < connectedPeerCount; i++) {
-             players.push({ id: i + 1, name: `Guest ${i + 1}`, hand: [], isBot: false, hasUno: false });
+             const guestId = i + 1;
+             const gName = guestNames[guestId] || `Guest ${guestId}`;
+             players.push({ id: guestId, name: gName, hand: [], isBot: false, hasUno: false });
         }
         const minPlayers = 2;
         const humans = players.length;
@@ -743,6 +764,8 @@ const App: React.FC = () => {
                 copiedId={copiedId}
                 isOffline={isOffline}
                 hostRoomName={hostRoomName}
+                playerName={playerName}
+                setPlayerName={setPlayerName}
             />
             
             <div className="fixed bottom-4 left-4 z-50">

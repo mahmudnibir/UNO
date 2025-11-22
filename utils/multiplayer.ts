@@ -102,6 +102,13 @@ class MultiplayerManager {
             });
 
             conn.on('data', (data: any) => {
+                // Inject Player ID so Host knows who sent it
+                // Host is 0, guests are 1, 2, 3 based on connection order
+                const playerId = this.connections.indexOf(conn) + 1;
+                if (typeof data === 'object') {
+                    data.playerId = playerId;
+                }
+
                 if (this.onDataReceived) this.onDataReceived(data);
             });
             

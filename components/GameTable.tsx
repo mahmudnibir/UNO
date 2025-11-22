@@ -162,17 +162,17 @@ const GameTable: React.FC<GameTableProps> = ({
                       break;
                   case 'top':
                       destX = w / 2;
-                      destY = h * 0.15 + 32; // Updated to match top: 15%
+                      destY = h * 0.12 + 28; // Matches Top 12%
                       rot = 180;
                       break;
                   case 'left':
-                      destX = w * 0.02 + 32; // Updated to match left: 2%
-                      destY = h * 0.5;       // Updated to match top: 50%
+                      destX = w * 0.02 + 28; // Matches Left 2%
+                      destY = h * 0.5;
                       rot = -90;
                       break;
                   case 'right':
-                      destX = w * 0.98 - 32; // Updated to match right: 2%
-                      destY = h * 0.5;       // Updated to match top: 50%
+                      destX = w * 0.98 - 28; // Matches Right 2%
+                      destY = h * 0.5;
                       rot = 90;
                       break;
               }
@@ -219,16 +219,16 @@ const GameTable: React.FC<GameTableProps> = ({
               break;
           case 'top':
               startX = w / 2; 
-              startY = h * 0.15 + 32; 
+              startY = h * 0.12 + 28; 
               rot = 180;
               break;
           case 'left':
-              startX = w * 0.02 + 32; 
+              startX = w * 0.02 + 28; 
               startY = h * 0.5; 
               rot = 90;
               break;
           case 'right':
-              startX = w * 0.98 - 32; 
+              startX = w * 0.98 - 28; 
               startY = h * 0.5; 
               rot = -90;
               break;
@@ -281,47 +281,52 @@ const GameTable: React.FC<GameTableProps> = ({
       <div className="relative flex flex-col items-center transition-all duration-500 group">
         {isTurn && <div className="absolute inset-0 bg-white/30 blur-xl rounded-full scale-150 animate-pulse" />}
         
-        {/* Emote Overlay */}
+        {/* Emote Overlay - Higher Z to appear above cards */}
         {emote && (
-            <div className="absolute -top-12 left-1/2 -translate-x-1/2 z-[60] animate-bounce text-4xl drop-shadow-lg">
+            <div className="absolute -top-12 left-1/2 -translate-x-1/2 z-[70] animate-bounce text-4xl drop-shadow-lg">
                 {emote}
             </div>
         )}
 
         {/* Chat Bubble */}
         {bubble && (
-            <div className="absolute -top-14 left-1/2 -translate-x-1/2 z-[60] bg-white text-black text-xs md:text-sm font-bold px-3 py-2 rounded-xl shadow-lg border-2 border-slate-200 whitespace-nowrap animate-in fade-in zoom-in slide-in-from-bottom-2 max-w-[150px] truncate">
+            <div className="absolute -top-14 left-1/2 -translate-x-1/2 z-[70] bg-white text-black text-xs md:text-sm font-bold px-3 py-2 rounded-xl shadow-lg border-2 border-slate-200 whitespace-nowrap animate-in fade-in zoom-in slide-in-from-bottom-2 max-w-[150px] truncate">
                 {bubble}
                 <div className="absolute bottom-[-6px] left-1/2 -translate-x-1/2 w-3 h-3 bg-white transform rotate-45 border-r-2 border-b-2 border-slate-200"></div>
             </div>
         )}
 
+        {/* Avatar Circle - Smaller Size */}
         <div className={`
-          w-14 h-14 md:w-16 md:h-16 rounded-full bg-slate-800 border-4 
+          w-10 h-10 md:w-14 md:h-14 rounded-full bg-slate-800 border-[3px] 
           ${isTurn ? 'border-yellow-400 scale-110 shadow-[0_0_20px_rgba(250,204,21,0.5)]' : 'border-slate-600 opacity-80'}
           flex items-center justify-center relative z-30 shadow-2xl transition-all
         `}>
-           {player.isBot ? <Bot size={28} className="text-slate-200" /> : <User size={28} className="text-blue-300" />}
-           <div className="absolute -bottom-2 bg-black/80 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-white/10 z-50 whitespace-nowrap">
+           {player.isBot ? <Bot size={20} className="text-slate-200" /> : <User size={20} className="text-blue-300" />}
+           
+           {/* Name Tag */}
+           <div className="absolute -bottom-3 bg-black/80 text-white text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-white/10 z-50 whitespace-nowrap shadow-md">
              {player.name}
            </div>
+
+           {/* Card Count Badge */}
            {position !== 'bottom' && (
-                <div className="absolute -top-2 -right-2 w-5 h-5 bg-red-600 rounded-full flex items-center justify-center text-[10px] font-bold text-white border-2 border-slate-900 shadow z-40">
+                <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full flex items-center justify-center text-[9px] font-bold text-white border border-slate-900 shadow z-40">
                     {player.hand.length}
                 </div>
            )}
         </div>
         
-        {/* Cards always below avatar for clean uniform look (Hidden for self/bottom player) */}
+        {/* Cards Hand Visual */}
         {position !== 'bottom' && (
-            <div className="absolute top-[100%] left-1/2 -translate-x-1/2 mt-1 z-20 pointer-events-none w-0 h-0 flex items-center justify-center">
+            <div className="absolute top-[100%] left-1/2 -translate-x-1/2 mt-2 z-20 pointer-events-none w-0 h-0 flex items-center justify-center">
             {Array.from({ length: visibleCards }).map((_, i) => {
                 const center = (visibleCards - 1) / 2;
                 const offset = i - center;
                 return (
                     <div key={i} className="absolute origin-bottom transition-all duration-300" 
-                        style={{ transform: `translateX(${offset * 10}px) rotate(${offset * 5}deg) translateY(${Math.abs(offset) * 2}px)`, zIndex: i }}>
-                        <CardView size="xs" flipped className="shadow-md border border-white/10 brightness-90 scale-90" />
+                        style={{ transform: `translateX(${offset * 6}px) rotate(${offset * 5}deg) translateY(${Math.abs(offset) * 2}px)`, zIndex: i }}>
+                        <CardView size="xs" flipped className="shadow-md border border-white/10 brightness-90 scale-75" />
                     </div>
                 );
             })}
@@ -329,8 +334,8 @@ const GameTable: React.FC<GameTableProps> = ({
         )}
         
         {player.hasUno && (
-            <div className="absolute -top-12 z-50 animate-bounce">
-               <div className="bg-red-600 text-white font-black px-2 py-1 rounded text-xs uppercase -rotate-12 shadow-lg border border-white">UNO!</div>
+            <div className="absolute -top-10 z-50 animate-bounce">
+               <div className="bg-red-600 text-white font-black px-2 py-0.5 rounded text-[10px] uppercase -rotate-12 shadow-lg border border-white">UNO!</div>
             </div>
         )}
       </div>
@@ -364,10 +369,10 @@ const GameTable: React.FC<GameTableProps> = ({
           if (pos === 'bottom') continue;
 
           let style: React.CSSProperties = {};
-          // Adjusted Layout for Mobile Responsiveness to prevent overlapping with Header
-          if (pos === 'left') style = { left: '2%', top: '50%', transform: 'translateY(-50%)' }; // Center Vertical
-          if (pos === 'right') style = { right: '2%', top: '50%', transform: 'translateY(-50%)' }; // Center Vertical
-          if (pos === 'top') style = { top: '15%', left: '50%', transform: 'translateX(-50%)' }; // Lowered to clear header
+          // Adjusted Layout for better spacing and no collision
+          if (pos === 'left') style = { left: '2%', top: '50%', transform: 'translateY(-50%)' }; 
+          if (pos === 'right') style = { right: '2%', top: '50%', transform: 'translateY(-50%)' }; 
+          if (pos === 'top') style = { top: '12%', left: '50%', transform: 'translateX(-50%)' }; // Higher up (12%)
 
           bots.push(<div key={i} className="absolute" style={style}><BotAvatar player={players[i]} index={i} position={pos as any} /></div>);
       }
@@ -416,7 +421,7 @@ const GameTable: React.FC<GameTableProps> = ({
                    </button>
                     {/* Emote Picker */}
                     {isEmoteOpen && (
-                        <div className="absolute right-0 top-full mt-3 w-48 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl p-2 grid grid-cols-4 gap-2 animate-in fade-in zoom-in slide-in-from-top-2 origin-top-right shadow-2xl z-[60]">
+                        <div className="absolute right-0 top-full mt-3 w-48 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl p-2 grid grid-cols-4 gap-2 animate-in fade-in zoom-in slide-in-from-top-2 origin-top-right shadow-2xl z-[110]">
                             {EMOTES.map(emoji => (
                                 <button 
                                     key={emoji}
@@ -487,15 +492,18 @@ const GameTable: React.FC<GameTableProps> = ({
       )}
 
       {/* Main Game Circle */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[60%] w-full flex flex-col items-center z-40">
-         <div className="absolute -top-24 h-8 pointer-events-none">
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[60%] w-full flex flex-col items-center z-10">
+         <div className="absolute -top-24 h-8 pointer-events-none z-50">
             <span className="px-4 py-1 bg-black/40 backdrop-blur-md rounded-full border border-white/10 text-white/80 text-sm font-medium shadow-lg whitespace-nowrap">{lastAction}</span>
          </div>
-         <div className={`absolute w-[300px] h-[300px] md:w-[500px] md:h-[500px] border-[1px] border-white/5 rounded-full ${direction === 1 ? 'animate-spin-slow' : 'animate-spin-slow-reverse'} pointer-events-none flex items-center justify-center`}>
+         
+         {/* Rotating Background Circle - MOVED TO z-0 and made smaller */}
+         <div className={`absolute w-[220px] h-[220px] md:w-[350px] md:h-[350px] border-[1px] border-white/5 rounded-full ${direction === 1 ? 'animate-spin-slow' : 'animate-spin-slow-reverse'} pointer-events-none flex items-center justify-center z-0`}>
              <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-900 p-2 rounded-full"><RotateCw className="text-white/20" /></div>
              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 bg-slate-900 p-2 rounded-full"><RotateCw className="text-white/20 rotate-180" /></div>
          </div>
-         <div className="flex gap-8 md:gap-16 items-center mt-4 relative">
+
+         <div className="flex gap-8 md:gap-16 items-center mt-4 relative z-20">
             <div 
                 className={`relative group transition-transform duration-200 ${mustDraw ? 'scale-110 cursor-pointer' : ''}`} 
                 onClick={currentPlayerIndex === myPlayerId ? onDrawCard : undefined}
