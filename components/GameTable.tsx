@@ -100,6 +100,7 @@ const GameTable: React.FC<GameTableProps> = ({
 
   const handleSendChatSubmit = (e: React.FormEvent) => {
       e.preventDefault();
+      e.stopPropagation(); // Prevent event bubbling that might cause zooms
       if(chatInput.trim()) {
           onSendChat(chatInput.trim());
           setChatInput('');
@@ -161,17 +162,17 @@ const GameTable: React.FC<GameTableProps> = ({
                       break;
                   case 'top':
                       destX = w / 2;
-                      destY = h * 0.02 + 40;
+                      destY = h * 0.15 + 32; // Updated to match top: 15%
                       rot = 180;
                       break;
                   case 'left':
-                      destX = w * 0.05 + 40;
-                      destY = h * 0.15 + 40;
+                      destX = w * 0.02 + 32; // Updated to match left: 2%
+                      destY = h * 0.5;       // Updated to match top: 50%
                       rot = -90;
                       break;
                   case 'right':
-                      destX = w * 0.95 - 40;
-                      destY = h * 0.15 + 40;
+                      destX = w * 0.98 - 32; // Updated to match right: 2%
+                      destY = h * 0.5;       // Updated to match top: 50%
                       rot = 90;
                       break;
               }
@@ -218,17 +219,17 @@ const GameTable: React.FC<GameTableProps> = ({
               break;
           case 'top':
               startX = w / 2; 
-              startY = h * 0.02 + 40; 
+              startY = h * 0.15 + 32; 
               rot = 180;
               break;
           case 'left':
-              startX = w * 0.05 + 40; 
-              startY = h * 0.15 + 40; 
+              startX = w * 0.02 + 32; 
+              startY = h * 0.5; 
               rot = 90;
               break;
           case 'right':
-              startX = w * 0.95 - 40; 
-              startY = h * 0.15 + 40; 
+              startX = w * 0.98 - 32; 
+              startY = h * 0.5; 
               rot = -90;
               break;
       }
@@ -363,9 +364,10 @@ const GameTable: React.FC<GameTableProps> = ({
           if (pos === 'bottom') continue;
 
           let style: React.CSSProperties = {};
-          if (pos === 'left') style = { left: '5%', top: '15%' };
-          if (pos === 'right') style = { right: '5%', top: '15%' };
-          if (pos === 'top') style = { top: '2%', left: '50%', transform: 'translateX(-50%)' };
+          // Adjusted Layout for Mobile Responsiveness to prevent overlapping with Header
+          if (pos === 'left') style = { left: '2%', top: '50%', transform: 'translateY(-50%)' }; // Center Vertical
+          if (pos === 'right') style = { right: '2%', top: '50%', transform: 'translateY(-50%)' }; // Center Vertical
+          if (pos === 'top') style = { top: '15%', left: '50%', transform: 'translateX(-50%)' }; // Lowered to clear header
 
           bots.push(<div key={i} className="absolute" style={style}><BotAvatar player={players[i]} index={i} position={pos as any} /></div>);
       }
@@ -377,7 +379,7 @@ const GameTable: React.FC<GameTableProps> = ({
       <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/felt.png')] pointer-events-none"></div>
       
       {/* --- Unified Top Bar HUD --- */}
-      <div className="absolute top-0 left-0 w-full p-2 md:p-4 flex justify-between items-start z-50 pointer-events-none">
+      <div className="absolute top-0 left-0 w-full p-2 md:p-4 flex justify-between items-start z-[100] pointer-events-none">
           {/* Left: Exit */}
           <button 
             onClick={onExitGame} 
@@ -412,7 +414,7 @@ const GameTable: React.FC<GameTableProps> = ({
                    >
                        <Smile size={20} />
                    </button>
-                    {/* Emote Picker (Dropdown from top right) */}
+                    {/* Emote Picker */}
                     {isEmoteOpen && (
                         <div className="absolute right-0 top-full mt-3 w-48 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl p-2 grid grid-cols-4 gap-2 animate-in fade-in zoom-in slide-in-from-top-2 origin-top-right shadow-2xl z-[60]">
                             {EMOTES.map(emoji => (
@@ -438,7 +440,7 @@ const GameTable: React.FC<GameTableProps> = ({
 
       {/* Chat Overlay (Fixed Position) */}
       {isChatOpen && (
-          <div className="absolute top-16 md:top-20 right-2 md:right-4 w-[calc(100vw-1rem)] md:w-80 max-h-[50vh] md:max-h-[400px] bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl z-50 flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-5 origin-top-right">
+          <div className="absolute top-16 md:top-20 right-2 md:right-4 w-[calc(100vw-1rem)] md:w-80 max-h-[50vh] md:max-h-[400px] bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl z-[110] flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-5 origin-top-right">
               <div className="p-3 border-b border-white/5 flex justify-between items-center bg-black/20">
                   <span className="font-bold text-white text-sm flex items-center gap-2"><MessageCircle size={14}/> Chat</span>
                   <button onClick={() => setIsChatOpen(false)} className="text-white/40 hover:text-white"><X size={16}/></button>
@@ -527,8 +529,7 @@ const GameTable: React.FC<GameTableProps> = ({
          </div>
       </div>
       
-      {/* Self Avatar (Invisible but useful for positioning if needed, currently separate from GameTable main layout for avatar, 
-          but adding it here to support bubbles/emotes for self) */}
+      {/* Self Avatar */}
       <div className="absolute bottom-6 left-6 z-50">
            <BotAvatar player={players[myPlayerId]} index={myPlayerId} position="bottom" />
       </div>
