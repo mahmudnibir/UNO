@@ -162,16 +162,16 @@ const GameTable: React.FC<GameTableProps> = ({
                       break;
                   case 'top':
                       destX = w / 2;
-                      destY = h * 0.12 + 28; // Matches Top 12%
+                      destY = h * 0.10 + 28; // Matches Top 10%
                       rot = 180;
                       break;
                   case 'left':
-                      destX = w * 0.02 + 28; // Matches Left 2%
+                      destX = w * 0.01 + 28; // Matches Left 1%
                       destY = h * 0.5;
                       rot = -90;
                       break;
                   case 'right':
-                      destX = w * 0.98 - 28; // Matches Right 2%
+                      destX = w * 0.99 - 28; // Matches Right 1%
                       destY = h * 0.5;
                       rot = 90;
                       break;
@@ -219,16 +219,16 @@ const GameTable: React.FC<GameTableProps> = ({
               break;
           case 'top':
               startX = w / 2; 
-              startY = h * 0.12 + 28; 
+              startY = h * 0.10 + 28; 
               rot = 180;
               break;
           case 'left':
-              startX = w * 0.02 + 28; 
+              startX = w * 0.01 + 28; 
               startY = h * 0.5; 
               rot = 90;
               break;
           case 'right':
-              startX = w * 0.98 - 28; 
+              startX = w * 0.99 - 28; 
               startY = h * 0.5; 
               rot = -90;
               break;
@@ -296,22 +296,22 @@ const GameTable: React.FC<GameTableProps> = ({
             </div>
         )}
 
-        {/* Avatar Circle - Smaller Size */}
+        {/* Avatar Circle - Smaller Size for better clearance */}
         <div className={`
-          w-10 h-10 md:w-14 md:h-14 rounded-full bg-slate-800 border-[3px] 
+          w-9 h-9 md:w-12 md:h-12 rounded-full bg-slate-800 border-[3px] 
           ${isTurn ? 'border-yellow-400 scale-110 shadow-[0_0_20px_rgba(250,204,21,0.5)]' : 'border-slate-600 opacity-80'}
           flex items-center justify-center relative z-30 shadow-2xl transition-all
         `}>
-           {player.isBot ? <Bot size={20} className="text-slate-200" /> : <User size={20} className="text-blue-300" />}
+           {player.isBot ? <Bot size={18} className="text-slate-200" /> : <User size={18} className="text-blue-300" />}
            
-           {/* Name Tag */}
-           <div className="absolute -bottom-3 bg-black/80 text-white text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-white/10 z-50 whitespace-nowrap shadow-md">
+           {/* Name Tag - Repositioned slightly */}
+           <div className="absolute -bottom-4 bg-black/80 text-white text-[8px] md:text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-white/10 z-50 whitespace-nowrap shadow-md">
              {player.name}
            </div>
 
-           {/* Card Count Badge */}
+           {/* Card Count Badge - Repositioned to not overlap */}
            {position !== 'bottom' && (
-                <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full flex items-center justify-center text-[9px] font-bold text-white border border-slate-900 shadow z-40">
+                <div className="absolute -top-2 -right-2 w-4 h-4 bg-red-600 rounded-full flex items-center justify-center text-[8px] font-bold text-white border border-slate-900 shadow z-40">
                     {player.hand.length}
                 </div>
            )}
@@ -319,13 +319,13 @@ const GameTable: React.FC<GameTableProps> = ({
         
         {/* Cards Hand Visual */}
         {position !== 'bottom' && (
-            <div className="absolute top-[100%] left-1/2 -translate-x-1/2 mt-2 z-20 pointer-events-none w-0 h-0 flex items-center justify-center">
+            <div className="absolute top-[100%] left-1/2 -translate-x-1/2 mt-3 z-20 pointer-events-none w-0 h-0 flex items-center justify-center">
             {Array.from({ length: visibleCards }).map((_, i) => {
                 const center = (visibleCards - 1) / 2;
                 const offset = i - center;
                 return (
                     <div key={i} className="absolute origin-bottom transition-all duration-300" 
-                        style={{ transform: `translateX(${offset * 6}px) rotate(${offset * 5}deg) translateY(${Math.abs(offset) * 2}px)`, zIndex: i }}>
+                        style={{ transform: `translateX(${offset * 5}px) rotate(${offset * 5}deg) translateY(${Math.abs(offset) * 1}px)`, zIndex: i }}>
                         <CardView size="xs" flipped className="shadow-md border border-white/10 brightness-90 scale-75" />
                     </div>
                 );
@@ -369,10 +369,10 @@ const GameTable: React.FC<GameTableProps> = ({
           if (pos === 'bottom') continue;
 
           let style: React.CSSProperties = {};
-          // Adjusted Layout for better spacing and no collision
-          if (pos === 'left') style = { left: '2%', top: '50%', transform: 'translateY(-50%)' }; 
-          if (pos === 'right') style = { right: '2%', top: '50%', transform: 'translateY(-50%)' }; 
-          if (pos === 'top') style = { top: '12%', left: '50%', transform: 'translateX(-50%)' }; // Higher up (12%)
+          // Adjusted Layout: Push more to the edges to clear center space
+          if (pos === 'left') style = { left: '1%', top: '50%', transform: 'translateY(-50%)' }; 
+          if (pos === 'right') style = { right: '1%', top: '50%', transform: 'translateY(-50%)' }; 
+          if (pos === 'top') style = { top: '10%', left: '50%', transform: 'translateX(-50%)' };
 
           bots.push(<div key={i} className="absolute" style={style}><BotAvatar player={players[i]} index={i} position={pos as any} /></div>);
       }
@@ -497,8 +497,8 @@ const GameTable: React.FC<GameTableProps> = ({
             <span className="px-4 py-1 bg-black/40 backdrop-blur-md rounded-full border border-white/10 text-white/80 text-sm font-medium shadow-lg whitespace-nowrap">{lastAction}</span>
          </div>
          
-         {/* Rotating Background Circle - MOVED TO z-0 and made smaller */}
-         <div className={`absolute w-[220px] h-[220px] md:w-[350px] md:h-[350px] border-[1px] border-white/5 rounded-full ${direction === 1 ? 'animate-spin-slow' : 'animate-spin-slow-reverse'} pointer-events-none flex items-center justify-center z-0`}>
+         {/* Rotating Background Circle - Strictly BEHIND everything (z-0) and smaller size */}
+         <div className={`absolute w-[200px] h-[200px] md:w-[280px] md:h-[280px] border-[1px] border-white/5 rounded-full ${direction === 1 ? 'animate-spin-slow' : 'animate-spin-slow-reverse'} pointer-events-none flex items-center justify-center z-0`}>
              <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-900 p-2 rounded-full"><RotateCw className="text-white/20" /></div>
              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 bg-slate-900 p-2 rounded-full"><RotateCw className="text-white/20 rotate-180" /></div>
          </div>

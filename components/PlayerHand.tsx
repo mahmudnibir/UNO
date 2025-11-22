@@ -52,7 +52,7 @@ const PlayerHand: React.FC<PlayerHandProps> = ({
          {/* UNO Button (Only visible when low cards) */}
          {hand.length <= 2 && !hasShoutedUno && hand.length > 0 && (
            <button 
-             onClick={onShoutUno}
+             onClick={() => onShoutUno()}
              className="bg-gradient-to-r from-orange-600 to-red-600 text-white px-8 py-3 rounded-full shadow-lg shadow-red-500/50 animate-bounce hover:scale-105 active:scale-95 transition-all font-black text-xl tracking-wider flex items-center gap-2 ring-4 ring-red-500/30"
            >
              <Megaphone className="animate-wiggle" size={24} fill="currentColor" /> UNO!

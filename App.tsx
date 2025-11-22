@@ -494,7 +494,9 @@ const App: React.FC = () => {
   }
 
   const handleShoutUno = (playerId?: number) => {
-    const id = playerId !== undefined ? playerId : myPlayerId;
+    // Safe-guard: if called via onClick event, playerId is an object. Default to myPlayerId.
+    const id = (typeof playerId === 'number') ? playerId : myPlayerId;
+    
     if (networkMode === NetworkMode.Client && id === myPlayerId) {
         mpManager.sendToHost({ type: 'SHOUT_UNO', payload: { playerId: id } });
         playSound('uno');

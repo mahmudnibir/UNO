@@ -264,23 +264,35 @@ const Lobby: React.FC<LobbyProps> = (props) => {
                                                         {props.copiedId && <div className="absolute inset-0 bg-green-500/90 flex items-center justify-center rounded-xl z-10 font-bold text-black">COPIED!</div>}
                                                     </div>
 
-                                                    <div className="flex-1 bg-white/5 rounded-xl p-4 mb-4 overflow-y-auto custom-scrollbar">
+                                                    <div className="flex-1 bg-white/5 rounded-xl p-4 mb-4 overflow-y-auto custom-scrollbar border border-white/5">
                                                         <div className="flex items-center justify-between mb-3">
                                                             <span className="text-white/40 text-xs font-bold uppercase tracking-widest">Lobby ({props.connectedPeerCount + 1}/4)</span>
                                                         </div>
                                                         <div className="space-y-2">
-                                                            <div className="flex items-center gap-3 p-3 bg-indigo-500/10 rounded-lg border border-indigo-500/20">
-                                                                <div className="w-2 h-2 rounded-full bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.5)]"></div>
-                                                                <span className="text-white font-bold text-sm flex-1">{props.playerName || 'Host'} (You)</span>
+                                                            <div className="flex items-center gap-3 p-3 bg-gradient-to-r from-indigo-600/20 to-slate-800/50 rounded-lg border border-indigo-500/20">
+                                                                <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white shadow-lg">
+                                                                    <User size={16} />
+                                                                </div>
+                                                                <div className="flex-1">
+                                                                    <div className="text-white font-bold text-sm">{props.playerName || 'Host'} <span className="text-white/40 ml-1">(You)</span></div>
+                                                                    <div className="text-[10px] text-indigo-300 font-bold uppercase">Host</div>
+                                                                </div>
                                                             </div>
                                                             {Array.from({ length: props.connectedPeerCount }).map((_, i) => (
                                                                 <div key={i} className="flex items-center gap-3 p-3 bg-white/5 rounded-lg border border-white/5 animate-in slide-in-from-left-2">
-                                                                    <div className="w-2 h-2 rounded-full bg-blue-400"></div>
-                                                                    {/* Host will see 'Guest X' until we fully implement real-time name syncing in list, but game start uses map */}
-                                                                    <span className="text-white/80 font-medium text-sm flex-1">Guest {i + 1}</span>
-                                                                    <button onClick={() => props.onKickPlayer(i)} className="text-white/20 hover:text-red-400 transition-colors p-1 hover:bg-white/5 rounded"><X size={14} /></button>
+                                                                    <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-white/50">
+                                                                        <User size={16} />
+                                                                    </div>
+                                                                    <div className="flex-1">
+                                                                        <div className="text-white/80 font-bold text-sm">Guest {i + 1}</div>
+                                                                        <div className="text-[10px] text-slate-500 font-bold uppercase">Connecting...</div>
+                                                                    </div>
+                                                                    <button onClick={() => props.onKickPlayer(i)} className="text-white/20 hover:text-red-400 transition-colors p-2 hover:bg-white/5 rounded-lg"><X size={16} /></button>
                                                                 </div>
                                                             ))}
+                                                            {props.connectedPeerCount === 0 && (
+                                                                <div className="text-center py-4 text-white/20 text-xs italic">Waiting for players to join...</div>
+                                                            )}
                                                         </div>
                                                     </div>
                                                     
