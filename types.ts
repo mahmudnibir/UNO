@@ -59,6 +59,7 @@ export interface GameState {
   drawStack: number; // Accumulates +2 or +4 penalties
   isUnoShouted: boolean; // UI state for player
   roomId?: string; // Multiplayer room ID
+  turnCount: number; // Added to track turns for stats
 }
 
 // --- Multiplayer Types ---
@@ -73,4 +74,29 @@ export interface NetworkMessage {
   type: 'GAME_STATE' | 'PLAY_CARD' | 'DRAW_CARD' | 'SHOUT_UNO' | 'JOIN_REQUEST' | 'PLAYER_JOINED' | 'ROOM_INFO' | 'KICKED' | 'PLAYER_LEFT';
   payload?: any;
   playerId?: number;
+}
+
+// --- Stats & Persistence ---
+
+export interface GameStats {
+  gamesPlayed: number;
+  wins: number;
+  bestTurnCount: number | null; // Fewest turns to win
+  currentStreak: number;
+}
+
+export interface Achievement {
+  id: string;
+  title: string;
+  description: string;
+  icon: string; // lucide icon name
+  unlocked: boolean;
+  unlockedAt?: number;
+}
+
+export interface LeaderboardEntry {
+  date: number;
+  winnerName: string;
+  turns: number;
+  mode: string;
 }
